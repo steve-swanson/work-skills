@@ -1,0 +1,4 @@
+interface:
+  display_name: "Plan Work"
+  short_description: "Investigate tickets and draft implementation plans"
+  default_prompt: "Use $plan-work to investigate this ticket or technical request and produce a decision-complete implementation plan."

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="referrer" content="no-referrer">
+    <title>Review</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3.5' fill='%231a1a19'/%3E%3Cpath d='M4.2 8.4l2.4 2.4 5.2-5.4' stroke='%23fff' stroke-width='1.8' fill='none'/%3E%3C/svg%3E">
+    <script src="/theme.js"></script>
+    <link rel="stylesheet" href="/style.css">
+    <script type="module" src="/app.mjs"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#detail">Skip to the selected finding</a>
+    <div class="app">
+      <header class="topbar">
+        <p class="crumb"><b id="project-title">Review</b><span class="sep" aria-hidden="true">/</span><code id="branch-name"></code><span id="review-meta" class="meta">Loading the review…</span></p>
+        <a id="pr-link" class="pr-link" target="_blank" rel="noreferrer noopener" hidden>View PR</a>
+        <p id="connection-status" class="live" role="status"><span class="dot" aria-hidden="true"></span><span id="connection-text">Connecting</span></p>
+        <div class="theme-switch" role="group" aria-label="Color theme">
+          <button type="button" data-theme-choice="auto" aria-pressed="true">Auto</button>
+          <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+          <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+        </div>
+      </header>
+
+      <p id="handoff" class="handoff" hidden></p>
+      <div class="messages">
+        <div id="connection-message" class="message" role="status" aria-live="polite" hidden></div>
+        <div id="page-message" class="message" role="status" aria-live="polite" hidden></div>
+        <p id="reload-action" class="message-action" hidden><button id="reload-findings" class="small-button" type="button">Reload findings</button></p>
+        <div id="delivery-message" class="message" role="status" aria-live="polite" hidden></div>
+      </div>
+
+      <section class="window" aria-label="Review findings">
+        <div class="toolbar">
+          <button id="toggle-list" class="icon-button" type="button" aria-controls="list-pane" aria-expanded="true" title="Hide the list (L)">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="1.5" y="2.5" width="13" height="11" rx="2" fill="none" stroke="currentColor"/><path d="M6.5 2.5v11" stroke="currentColor"/></svg>
+            <span id="toggle-list-label" class="sr-only">Hide the list</span>
+          </button>
+          <div class="tabs" role="group" aria-label="Show findings">
+            <button type="button" data-tab="pending" aria-pressed="false">To decide<span class="count" id="count-pending">0</span></button>
+            <button type="button" data-tab="decided" aria-pressed="false">Ready<span class="count" id="count-decided">0</span></button>
+            <button type="button" data-tab="progress" aria-pressed="false">In progress<span class="count" id="count-progress">0</span></button>
+            <button type="button" data-tab="done" aria-pressed="false">Done<span class="count" id="count-done">0</span></button>
+            <button type="button" data-tab="all" aria-pressed="false">All<span class="count" id="count-all">0</span></button>
+          </div>
+          <form id="filters" class="search" role="search"><label class="sr-only" for="search">Search findings</label><input id="search" type="search" placeholder="Search" autocomplete="off" aria-keyshortcuts="/"></form>
+        </div>
+        <div id="kind-bar" class="kind-bar" hidden>
+          <span class="kind-hint" aria-hidden="true">Filter</span>
+          <div id="kind-filters" class="chips" role="group" aria-label="Filter by type. None picked shows everything."></div>
+        </div>
+
+        <div id="split" class="split">
+          <nav id="list-pane" class="list-pane" aria-label="Findings list">
+            <ol id="finding-list" class="finding-list"></ol>
+            <p id="list-empty" class="list-empty" hidden></p>
+            <section id="review-detail" class="review-detail" hidden><details><summary>Coverage and checks <span id="detail-count"></span></summary><div id="detail-content"></div></details></section>
+          </nav>
+
+          <main id="detail" class="detail-pane" tabindex="-1">
+            <div id="detail-empty" class="detail-empty"><h2 id="empty-title">Loading the review…</h2><p id="empty-detail"></p></div>
+            <article id="detail-card" class="detail-card" aria-labelledby="detail-title" hidden>
+              <div class="detail-head">
+                <span id="d-label" class="d-label"></span>
+                <span id="d-id" class="d-id"></span>
+                <span id="d-status" class="tag"></span>
+                <span class="stepper">
+                  <button id="prev-finding" class="icon-button" type="button" aria-label="Previous finding" title="Previous (K)" aria-keyshortcuts="K">‹</button>
+                  <span id="position" class="position"></span>
+                  <button id="next-finding" class="icon-button" type="button" aria-label="Next finding" title="Next (J)" aria-keyshortcuts="J">›</button>
+                </span>
+              </div>
+              <h2 id="detail-title"></h2>
+              <p class="location"><code id="d-path"></code><span id="d-commit"></span></p>
+              <section id="d-discussion" class="part"><h3>Why it matters</h3><p id="d-discussion-text"></p></section>
+              <section id="d-evidence" class="part"><h3>Proof</h3><pre id="d-excerpt" class="excerpt" hidden></pre><p id="d-evidence-text"></p></section>
+              <section id="d-suggestion" class="part"><h3>Fix idea</h3><p id="d-suggestion-text"></p></section>
+              <section id="d-resolution" class="part"><h3>Latest update</h3><p id="d-resolution-text"></p></section>
+              <div class="decide">
+                <div id="choices" class="choices" role="group" aria-label="Decision">
+                  <button type="button" data-decision="fix" aria-pressed="false" aria-keyshortcuts="F">Fix <kbd aria-hidden="true">F</kbd></button>
+                  <button type="button" data-decision="dont_fix" aria-pressed="false" aria-keyshortcuts="D">Don’t fix <kbd aria-hidden="true">D</kbd></button>
+                  <button type="button" data-decision="clarify" aria-pressed="false" aria-keyshortcuts="C">Clarify <kbd aria-hidden="true">C</kbd></button>
+                </div>
+                <span id="save-state" class="save-state"></span>
+              </div>
+              <div class="note">
+                <label for="note"><span id="note-label">Note</span> <span class="optional">(optional)</span></label>
+                <textarea id="note" rows="3" aria-keyshortcuts="N"></textarea>
+              </div>
+              <p id="read-only" class="read-only-note" hidden></p>
+              <div id="card-error" class="card-error" role="status" hidden>
+                <p id="error-text"></p>
+                <p id="remote-text"></p>
+                <div class="card-error-actions">
+                  <button id="retry-save" class="small-button" type="button">Retry save</button>
+                  <button id="use-saved" class="small-button" type="button">Use saved version</button>
+                  <button id="keep-draft" class="small-button" type="button">Save my draft instead</button>
+                </div>
+              </div>
+            </article>
+          </main>
+        </div>
+
+        <footer class="submit-bar">
+          <p class="save-summary"><strong id="save-summary" role="status" aria-live="polite">Loading review…</strong> <span id="submit-help"></span></p>
+          <p class="keys" aria-hidden="true">J / K move · F / D / C choose · N note · L list</p>
+          <button id="submit" class="primary-button" type="button" disabled>Submit</button>
+        </footer>
+      </section>
+    </div>
+    <noscript><p class="message error">JavaScript is required to save and submit review decisions.</p></noscript>
+  </body>
+</html>
