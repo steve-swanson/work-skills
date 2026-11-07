@@ -29,7 +29,7 @@ does not prove a reviewer or fixer is running.
 
 Set status from real evidence. A fix task is `verifying` when its child
 finishes, and `completed` only after its inspected commit is merged into the
-coordinator with passing checks. Record incomplete, failed, and blocked work as
+coordinator with passing focused checks. Record incomplete, failed, and blocked work as
 it is.
 
 ## T3: start the coordinator
@@ -110,7 +110,8 @@ Each brief contains:
 - coordinator's current SHA
 - concrete plan: change summary, owned paths, and acceptance checks
 - exact model and effort chosen for this phase
-- commands and product acceptance criteria
+- focused check commands (only the tests for the owned files, never the full
+  suite) and product acceptance criteria
 - output fields: commit, checks, concerns, artifacts
 
 Never put credential values in a brief.
@@ -129,12 +130,16 @@ Merge independent parallel tasks one at a time:
 1. Wait until the child stops writing. Inspect its commits.
 2. Rebase the unpushed task branch onto the coordinator's newest tip. Resolve
    conflicts so accepted behavior stays.
-3. Rerun the affected checks.
+3. Rerun that task's focused checks.
 4. Verify the task branch contains the coordinator's tip, then run
    `git merge --ff-only`.
 5. Record the child's final **post-rebase** commit.
 6. Once merged with required checks passing, clean up the task at once. Do not
    keep merged task worktrees for PR review.
+
+After the last task merges, run the full suite once in the coordinator. Fix any
+failure there, or send it back to the owning fixer with a focused brief. Run the
+full suite again until it passes. This pass is the combined verification.
 
 Never replace a failed fast-forward with squash, cherry-pick, merge commit, or
 coordinator reset. Later Clarify fixes start from the same coordinator's updated
@@ -164,7 +169,8 @@ baseline audit.
 1. Check `readiness`.
 2. Decide every important coverage item still skipped or incomplete.
 3. Verify the current target (the reviewed branch now).
-4. Run the combined checks.
+4. Run the full suite (the combined checks), unless it already passed on this
+   exact head.
 5. Inspect the final diff.
 6. Reuse or open exactly one PR with base=`manifest.branch`.
 

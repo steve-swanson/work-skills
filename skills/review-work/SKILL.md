@@ -301,10 +301,17 @@ Read [orchestration.md](references/orchestration.md) and
      to main for planning, then reroute implementation with the updated plan.
 
    Each fix brief has: the finding and its proof, the user's note, owned files,
-   checks to pass, base SHA, model, effort, and a stable dispatch key.
+   focused checks to pass, base SHA, model, effort, and a stable dispatch key.
+   - **Focused checks only.** A fixer runs only the checks for the code it
+     changed: its new regression test, the test files for its owned paths, and
+     a lint or type check on those files when the repo has one. Put the exact
+     commands in the brief (for example `npm test -- test/cart.test.js`). The
+     fixer never runs the full test suite. If the repo cannot run a subset, the
+     fixer runs the smallest command that covers its files and says so in
+     `checks`.
 5. Read every result and diff yourself. Then merge one task at a time:
    1. Rebase the next unpushed task branch onto the coordinator's newest HEAD.
-   2. Rerun the checks it affects.
+   2. Rerun that task's focused checks.
    3. Merge it with `git merge --ff-only`. If that fails, fix the rebase. Never
       replace a failed fast-forward with a squash, cherry-pick, merge commit, or
       coordinator reset.
@@ -317,18 +324,24 @@ Read [orchestration.md](references/orchestration.md) and
    Helpers report every checkout they create. They never push task branches or
    remove another helper's worktree.
 8. Later Clarify fixes reuse the same coordinator branch and its current HEAD.
-9. After the PR opens, and after any late review work or interruption, compare
-   branches and worktrees with the Step 1 snapshot again. While the PR is open,
-   the coordinator must be the **only** branch and worktree left from this run.
-   Report anything else as **cleanup blocked**, with the exact reason. The work
-   is not complete while routine cleanup remains. Stopping the page or removing
-   worktrees never deletes review history.
+9. **Run the full test suite once, after all fixes merge.** In the coordinator,
+   run every check the repo's CI runs (tests, lint, type check, build). If a
+   check fails, find the cause. Fix it in the coordinator, or send it back to
+   the fixer that owns the file with a focused brief. Then run the full suite
+   again. Repeat until it passes. Record the pass as combined verification. A
+   fix merged later (for example from Clarify) needs one more full run.
+10. After the PR opens, and after any late review work or interruption, compare
+    branches and worktrees with the Step 1 snapshot again. While the PR is open,
+    the coordinator must be the **only** branch and worktree left from this run.
+    Report anything else as **cleanup blocked**, with the exact reason. The work
+    is not complete while routine cleanup remains. Stopping the page or removing
+    worktrees never deletes review history.
 
 ## Step 7: Open one PR
 
 1. When decisions, Clarify talks, fixes, checks, and cleanup are done, check the
    reviewed branch again. If it moved, read the new commits, rebase the
-   coordinator if it is not pushed yet, and rerun checks. Ask again only if a
+   coordinator if it is not pushed yet, and rerun the full suite. Ask again only if a
    fix changed in a meaningful way. Never force-push without clear permission.
 2. Open, or reuse, **one ready-for-review PR into the reviewed branch**. Check the
    remote, base, head, and pushed commit. Use the project's PR template. If the
