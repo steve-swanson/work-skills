@@ -48,20 +48,70 @@ inherited option for an invalid one, no inherited default model.
 
 Allowed models, by selected family:
 
-- **GPT:** available GPT agent models from the supplied catalog.
-- **Claude:** available Opus 5.5, Sonnet 5.5, and Haiku 5.5 models. The name
-  or ID must show model and version (`5.5` or `5-5`). An opaque host ID can
-  carry this in the optional `name`.
+- **GPT:** available GPT agent models from the supplied catalog. Tiers are
+  Astra, Sol, and Terra.
+- **Claude:** available Opus, Sonnet, and Haiku models. Other Claude models
+  are not routed.
+
+**Newest version per tier.** The runtime reads the tier and version from the
+ID or `name` (`claude-opus-5-5`, `Opus 5.5`, `gpt-6.1-sol`, `GPT 6.1 Sol`).
+Date suffixes are ignored. For each tier, only the newest version in the
+host catalog is eligible; older versions fail with `model_not_allowed`. An
+entry with no readable version (such as an `opus` alias) counts only when its
+tier has no versioned entry. An opaque host ID can carry the tier and version
+in the optional `name`. Untiered GPT models stay eligible for non-security
+reviews.
+
+## Route by task phase
+
+Route each phase separately. The finding's severity and the reviewer's model
+are not the implementation route. Reuse a sufficient fix idea; main fills small
+plan gaps. Use Astra or Opus for further planning when hard decisions remain,
+then dispatch the planned fix to an implementation model.
+
+- `kind: "fix"` or `"implementation"` requires `plan: {summary, paths,
+  acceptanceCriteria}`: a concrete change summary and nonempty arrays of owned
+  paths and acceptance checks. Otherwise routing returns
+  `implementation_plan_required` before asking Jev. Include regression checks
+  and settled security behavior where relevant.
+- GPT implementation candidates are the **newest Sol and newest Terra**;
+  Claude implementation candidates are the **newest Sonnet and newest Haiku**. Match the host's
+  real IDs or display names. Pick the least costly adequately capable option;
+  Haiku suits mechanical edits, while Sonnet, Sol, or Terra suit fixes needing
+  more implementation judgment. Effort is selected separately.
+- Planned security fixes keep their security classification and run at
+  exactly **High** (the fix cap), without inheriting the Astra/Opus model floor. New decisions
+  or scope return to main for a planning task and an updated implementation plan.
+- `kind: "planning"`, review, and unclassified tasks retain the reasoning floors
+  below. Astra/Opus are available for reasoning, not planned fix execution.
+- A missing implementation model is a blocker; never silently use a premium
+  reviewer or switch families. These constraints apply to Jev and main judgment.
+
+The plan is passed to Jev along with the task evidence. It contains no secrets.
+
+## Effort caps
+
+Caps apply to every model and every route source (Jev or main judgment):
+
+- Review, planning, and unclassified tasks: at most **xhigh**. `max` and
+  `ultra` are never routed, even when the host offers them.
+- `kind: "fix"` or `"implementation"`: at most **High**.
+
+A route above the cap fails `validateRoute` with `effort_not_allowed`. If no
+model has an effort between the floor and the cap, routing returns
+`required_model_blocked` with `required.maximumEffort`.
 
 ## Risk floors
 
 `assessRisk(task)` reads explicit risk flags and the task's title,
-description, scope, paths, areas, kind, evidence, and risk text. It sets a
+description, scope, paths, areas, kind, evidence, risk text, and plan. It sets a
 **floor**: the lowest model or effort allowed.
 
-**Security:** security, authentication, authorization, secrets, crypto,
-tenant isolation, and trust boundaries need an available Astra at **xhigh**
-for GPT or Opus 5.5 at **max** for Claude. Common auth and secret terms such
+**Security review and planning:** security, authentication, authorization, secrets, crypto,
+tenant isolation, and trust boundaries need the newest available Astra for
+GPT or the newest Opus for Claude, at **xhigh**. If that model has no xhigh,
+the same model's highest level below xhigh is used, if it is at least High.
+The route then carries `effortFallback: true`. Older versions are never used. Common auth and secret terms such
 as OAuth, authz, credentials, API keys, and passwords also trigger it.
 
 - An ordinary label never cancels a security signal.
@@ -78,6 +128,8 @@ as OAuth, authz, credentials, API keys, and passwords also trigger it.
 - Read-only inventory (listing) may use Low. Set both `readOnly: true` and
   the word inventory in kind, scope, or description.
 - Algorithm and uncertain work need at least High.
+- A planned fix with no risk signal may use Low, Medium, or High. Its plan
+  settles the scope. Explicitly uncertain fixes still need High.
 - Known ordinary work may use any supported effort if `risk: "ordinary"` is
   explicit.
 - An unclassified task counts as uncertain. Jev is told to choose High when
@@ -93,7 +145,7 @@ const result = await routeTask({
   callerRole: "main",
   selectedModel, catalog,
   task: {
-    id: "R001", kind: "review", // "fix" uses the same rules
+    id: "R001", kind: "review", // planned implementation uses "fix" and a plan
     description: "Concrete bounded task",
     scope: ["src/example.ts"],
     evidence: ["Observed behavior relevant to this task"],
@@ -105,12 +157,14 @@ const result = await routeTask({
 
 Task evidence holds only these fields (any JSON values): `id`, `kind`, `title`,
 `description`, `scope`, `paths`, `areas`, `evidence`, `readOnly`, `risk`,
-`uncertain`, `security`, `securitySensitive`, and `algorithm`. Before asking a
+`uncertain`, `security`, `securitySensitive`, `algorithm`, and `plan`. Before asking a
 provider for judgment, main must remove credentials and unrelated private data
 from it. Credential environment records are never sent as evidence.
 
 Results:
 
+- `implementation_plan_required`: complete the change summary, paths, and
+  acceptance checks before routing a fix.
 - `routed`: check current capacity, then dispatch the exact `route.modelId`,
   `route.effort`, and `route.effortOptionId` returned.
 - `main_judgment_required`: decide explicitly from the returned task evidence

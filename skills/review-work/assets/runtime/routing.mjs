@@ -8,6 +8,9 @@ export const KEY_ALIASES = Object.freeze([
   'TYPESAFE_API_KEY', 'JEV_API_KEY', 'TYPESAFE_KEY', 'JEV_KEY', 'TYPESAFE_API', 'JEV_API',
 ]);
 const LEVELS = Object.freeze({ low: 0, medium: 1, high: 2, xhigh: 3, max: 4, ultra: 5 });
+/** Hard ceilings for every model: reviews and planning stop at xhigh; fixes stop at high. */
+const REVIEW_EFFORT_CAP = 'xhigh';
+const FIX_EFFORT_CAP = 'high';
 const OFFICIAL_ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const nonempty = value => typeof value === 'string' && value.trim().length > 0;
@@ -135,7 +138,7 @@ function textValues(value, depth = 0) {
 export function assessRisk(task = {}) {
   const evidence = [];
   const securityPattern = /(?:^|[^a-z])(?:security|auth[nz]?|authentication|authorization|authorisation|oauth|sso|rbac|abac|jwt|secrets?|credentials?|passwords?|api[-_\s]+keys?|crypt(?:o|ography|ographic)|encryption|decryption|tenant[-_\s/]+isolation|trust[-_\s]+boundar(?:y|ies)|(?:sql|command|code|prompt)[-_\s]+injection|csrf|xss|ssrf|access[-_\s]+control|sessions?|cookies?|cross[-_\s]+site[-_\s]+(?:scripting|request[-_\s]+forgery)|path[-_\s]+traversal|remote[-_\s]+code[-_\s]+execution)(?:[^a-z]|$)/i;
-  const fields = ['title', 'description', 'scope', 'paths', 'areas', 'kind', 'evidence', 'risk'];
+  const fields = ['title', 'description', 'scope', 'paths', 'areas', 'kind', 'evidence', 'risk', 'plan'];
   for (const field of fields) {
     if (textValues(task[field]).some(value => securityPattern.test(value))) evidence.push(`${field}:security_signal`);
   }
@@ -151,7 +154,8 @@ export function assessRisk(task = {}) {
   if (!uncertain && (task.risk === 'ordinary' || task.risk?.category === 'ordinary')) {
     return { category: 'ordinary', security: false, minimumEffort: 'low', evidence: ['task:explicit_ordinary'] };
   }
-  return { category: 'uncertain', security: false, minimumEffort: 'high', evidence: ['task:uncertain_effort_defaults_high'] };
+  return { category: 'uncertain', security: false, minimumEffort: 'high', unclassified: !uncertain,
+    evidence: [uncertain ? 'task:explicit_uncertain' : 'task:uncertain_effort_defaults_high'] };
 }
 
 /** availableCapacity means free concurrent agent slots, never batch width. */
@@ -191,20 +195,72 @@ function normalizeCatalog(catalog) {
       : { value: option?.value, level: effortLevel(option?.level) });
     if (efforts.some(option => !nonempty(option.value) || !option.level)
       || new Set(efforts.map(option => option.value)).size !== efforts.length) return null;
-    normalized.push({ id: model.id, name: nonempty(model.name) ? model.name : model.id, family,
-      provider: nonempty(model.provider) ? model.provider : null, efforts, effortOptionId: model.effortOptionId });
+    const entry = { id: model.id, name: nonempty(model.name) ? model.name : model.id, family,
+      provider: nonempty(model.provider) ? model.provider : null, efforts, effortOptionId: model.effortOptionId };
+    entry.tier = modelTier(entry, family);
+    entry.version = entry.tier ? modelVersion(entry, entry.tier) : null;
+    normalized.push(entry);
   }
   return normalized;
 }
 
-const claude55 = model => /\b(?:opus|sonnet|haiku)[-\s]*5[.\-]5\b/i.test(`${model.id} ${model.name}`);
-const securityModel = (model, family) => family === 'gpt'
-  ? /(?:^|[^a-z])astra(?:[^a-z]|$)/i.test(`${model.id} ${model.name}`)
-  : /\bopus[-\s]*5[.\-]5\b/i.test(`${model.id} ${model.name}`);
+/**
+ * Models are matched by tier name, never by a fixed version. Only the newest
+ * version of each tier in the host's live catalog is eligible.
+ */
+const TIERS = Object.freeze({ gpt: ['astra', 'sol', 'terra'], claude: ['opus', 'sonnet', 'haiku'] });
+const SECURITY_TIER = Object.freeze({ gpt: 'astra', claude: 'opus' });
+const IMPLEMENTATION_TIERS = Object.freeze({ gpt: ['sol', 'terra'], claude: ['sonnet', 'haiku'] });
+const modelLabel = model => `${model.id} ${model.name}`.toLowerCase()
+  .replace(/(?:^|[^\d])(?:19|20)\d{2}-?\d{2}-?\d{2}(?!\d)/g, ' ');
+
+function modelTier(model, family) {
+  const label = modelLabel(model);
+  return TIERS[family].find(tier => new RegExp(`(?:^|[^a-z])${tier}(?:[^a-z]|$)`).test(label)) ?? null;
+}
+
+/** Reads "opus-5-5", "Opus 5.5", "gpt-6.1-sol", or "GPT 6.1 Sol" as [major, minor]. */
+function modelVersion(model, tier) {
+  const label = modelLabel(model);
+  const number = '(\\d{1,3})(?:[.\\-](\\d{1,3}))?(?!\\d)';
+  const match = label.match(new RegExp(`(?:^|[^a-z])${tier}[-_\\s]*${number}`))
+    ?? label.match(new RegExp(`(?:^|[^\\d.])${number}[-_\\s]+${tier}(?:[^a-z]|$)`));
+  return match ? [Number(match[1]), Number(match[2] ?? 0)] : null;
+}
+
+const compareVersions = (a, b) => a[0] - b[0] || a[1] - b[1];
+
+/** Keep the newest version per tier. Unversioned entries count only when a tier has no versioned entry. */
+function newestPerTier(models, family) {
+  const newest = new Map();
+  for (const model of models) {
+    if (!model.tier || !model.version) continue;
+    const current = newest.get(model.tier);
+    if (!current || compareVersions(model.version, current) > 0) newest.set(model.tier, model.version);
+  }
+  return models.filter(model => {
+    if (!model.tier) return family === 'gpt';
+    const top = newest.get(model.tier);
+    return top ? model.version && compareVersions(model.version, top) === 0 : true;
+  });
+}
+
+/** Security review: exact xhigh, else the same model's highest level at or below the cap and at least High. */
+function securityEfforts(model) {
+  const exact = model.efforts.filter(effort => effort.level === 'xhigh');
+  if (exact.length) return { efforts: exact, effortFallback: false };
+  const usable = model.efforts.filter(effort => LEVELS[effort.level] >= LEVELS.high && LEVELS[effort.level] <= LEVELS[REVIEW_EFFORT_CAP]);
+  const best = Math.max(-1, ...usable.map(effort => LEVELS[effort.level]));
+  return { efforts: usable.filter(effort => LEVELS[effort.level] === best), effortFallback: true };
+}
+const implementationTask = task => ['fix', 'implementation'].includes(task.kind);
+const concretePlan = plan => record(plan) && nonempty(plan.summary)
+  && ['paths', 'acceptanceCriteria'].every(key => Array.isArray(plan[key])
+    && plan[key].length > 0 && plan[key].every(nonempty));
 
 function taskEvidence(task) {
   const evidence = {};
-  for (const name of ['id', 'kind', 'title', 'description', 'scope', 'paths', 'areas', 'evidence', 'readOnly', 'risk', 'uncertain', 'security', 'securitySensitive', 'algorithm']) {
+  for (const name of ['id', 'kind', 'title', 'description', 'scope', 'paths', 'areas', 'evidence', 'readOnly', 'risk', 'uncertain', 'security', 'securitySensitive', 'algorithm', 'plan']) {
     if (task[name] !== undefined) evidence[name] = structuredClone(task[name]);
   }
   return evidence;
@@ -217,15 +273,22 @@ function contextFor({ callerRole, selectedModel, catalog, task }) {
   if (!normalized) return failure('invalid_model_catalog');
   const family = modelFamily(selectedModel, normalized);
   if (!family) return failure('unknown_selected_family');
+  const implementing = implementationTask(task);
+  if (implementing && !concretePlan(task.plan)) return { status: 'implementation_plan_required', reason: 'concrete_fix_plan_required' };
   const risk = assessRisk(task);
-  const required = risk.security ? { model: family === 'gpt' ? 'Astra' : 'Opus 5.5', effort: family === 'gpt' ? 'xhigh' : 'max' } : null;
-  let candidates = normalized.filter(model => model.family === family && (family !== 'claude' || claude55(model)));
-  if (risk.security) candidates = candidates.filter(model => securityModel(model, family));
-  candidates = candidates.map(model => ({ ...model, efforts: model.efforts.filter(effort => required
-    ? effort.level === required.effort : LEVELS[effort.level] >= LEVELS[risk.minimumEffort]) })).filter(model => model.efforts.length);
-  const context = { family, risk, required, allowedCandidates: candidates, taskEvidence: taskEvidence(task) };
+  // A concrete plan settles an unclassified fix, so it may use any effort up to the fix cap.
+  const minimumEffort = risk.security ? 'high' : implementing && risk.unclassified ? 'low' : risk.minimumEffort;
+  const required = risk.security && !implementing ? { model: family === 'gpt' ? 'newest Astra' : 'newest Opus', effort: 'xhigh' } : null;
+  const maximumEffort = implementing ? FIX_EFFORT_CAP : REVIEW_EFFORT_CAP;
+  let candidates = newestPerTier(normalized.filter(model => model.family === family), family);
+  if (implementing) candidates = candidates.filter(model => IMPLEMENTATION_TIERS[family].includes(model.tier));
+  else if (risk.security) candidates = candidates.filter(model => model.tier === SECURITY_TIER[family]);
+  candidates = candidates.map(model => required ? { ...model, ...securityEfforts(model) }
+    : { ...model, efforts: model.efforts.filter(effort => LEVELS[effort.level] >= LEVELS[minimumEffort]
+      && LEVELS[effort.level] <= LEVELS[maximumEffort]) }).filter(model => model.efforts.length);
+  const context = { family, risk, required, maximumEffort, allowedCandidates: candidates, taskEvidence: taskEvidence(task) };
   if (!candidates.length) return { ...context, status: 'required_model_blocked', reason: required ? 'required_security_model_or_effort_unavailable' : 'no_eligible_model_effort',
-    required: required ?? { effort: risk.minimumEffort } };
+    required: required ?? { effort: minimumEffort, maximumEffort } };
   return { ...context, status: 'ready' };
 }
 
@@ -240,7 +303,7 @@ export function validateRoute(input = {}) {
   if (!selected.efforts.some(effort => effort.value === route.effort)) return { valid: false, ...failure('effort_not_allowed') };
   if (route.effortOptionId !== undefined && route.effortOptionId !== selected.effortOptionId) return { valid: false, ...failure('effort_option_id_mismatch') };
   return { valid: true, status: 'validated', route: { modelId: selected.id, family: context.family,
-    effort: route.effort, effortOptionId: selected.effortOptionId } };
+    effort: route.effort, effortOptionId: selected.effortOptionId, ...(selected.effortFallback ? { effortFallback: true } : {}) } };
 }
 
 function choiceRequest(stage, context, model) {
@@ -251,8 +314,10 @@ function choiceRequest(stage, context, model) {
 
 function wireInput(request, jevModel, signal) {
   const instructions = request.stage === 'model'
-    ? 'Choose the best available model for this review or fix task. Consider task complexity, risk, and adequate capability. Use only the supplied host model IDs. The main agent will separately choose a supported reasoning effort.'
-    : 'Choose supported reasoning effort for the already selected model and this review or fix task. Read-only inventory can use Low. Algorithms need High or higher. When effort is uncertain choose High. Security floors have already restricted the available choices. Use only a supplied exact effort value.';
+    ? 'Choose the least costly adequately capable model for this task phase. Candidates are already limited to the newest version of each tier the host offers. For planned fixes, use the supplied plan and acceptance criteria to judge implementation difficulty, not the reviewer model or original finding severity. Use only the supplied host model IDs. The main agent will separately choose a supported reasoning effort.'
+    : ['fix', 'implementation'].includes(request.task?.kind)
+      ? 'Choose the lowest supported reasoning effort adequate for this planned fix, judged from the plan and acceptance criteria. Mechanical edits can use Low; typical bounded fixes can use Medium; use High only for fixes that need real code judgment. Fixes are capped at High, and security fixes are already restricted to High. Use only a supplied exact effort value.'
+      : 'Choose supported reasoning effort for the already selected model and this review or planning task. Read-only inventory can use Low. Algorithms need High or higher. When effort is uncertain choose High. Security floors and the extra-high review ceiling have already restricted the available choices. Use only a supplied exact effort value.';
   return { state: { task: request.task, risk: request.risk, family: request.family, ...(request.modelId ? { modelId: request.modelId } : {}) },
     questions: { [request.stage]: { type: 'choice', instructions, criteria: Object.fromEntries(request.candidates.map(candidate => [candidate.value ?? candidate.id, candidate])) } },
     model: jevModel, signal };

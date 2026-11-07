@@ -13,7 +13,7 @@ const catalog = [
   { id: 'gpt-6-astra', family: 'gpt', provider: 'openai', efforts: ['high', 'xhigh'], effortOptionId: 'reasoning_effort' },
   { id: 'claude-haiku-5-5', family: 'claude', provider: 'anthropic', efforts: ['low', 'high'], effortOptionId: 'effort' },
   { id: 'claude-sonnet-5-5', family: 'claude', provider: 'anthropic', efforts: ['low', 'high'], effortOptionId: 'effort' },
-  { id: 'claude-opus-5-5', family: 'claude', provider: 'anthropic', efforts: ['high', 'max'], effortOptionId: 'effort' },
+  { id: 'claude-opus-5-5', family: 'claude', provider: 'anthropic', efforts: ['high', 'xhigh', 'max'], effortOptionId: 'effort' },
 ];
 const task = { id: 'R001', kind: 'review', description: 'Review a layout change', risk: 'ordinary' };
 const base = { callerRole: 'main', selectedModel: 'gpt-6-astra', catalog, task, credentialOptions: { env: {}, homeConfig: false } };
@@ -204,10 +204,10 @@ test('configured judge adapter takes priority over direct transport', async () =
 
 test('routing passes task evidence to a configured adapter for both review and fix tasks', async () => {
   for (const kind of ['review', 'fix']) {
-    const result = await routeTask({ ...base, task: { ...task, kind, evidence: ['Observed failing assertion in the requested scope'] }, judge: async request => {
+    const result = await routeTask({ ...base, catalog: implementationCatalog, task: { ...task, kind, plan: kind === 'fix' ? implementationPlan : undefined, evidence: ['Observed failing assertion in the requested scope'] }, judge: async request => {
       assert.equal(request.task.kind, kind);
       assert.deepEqual(request.task.evidence, ['Observed failing assertion in the requested scope']);
-      return { choice: request.stage === 'model' ? 'gpt-6-mini' : 'high' };
+      return { choice: request.stage === 'model' ? (kind === 'fix' ? 'gpt-6.1-sol' : 'gpt-6-mini') : 'high' };
     } });
     assert.equal(result.status, 'routed');
   }
@@ -274,9 +274,9 @@ test('reviewer and fixer subagents cannot route and inline override cannot bypas
   assert.notEqual(result.status, 'routed');
 });
 
-test('security work requires Astra xhigh or Opus 5.5 max, including explicit main judgment', async () => {
+test('security work requires Astra xhigh or Opus 5.5 xhigh, including explicit main judgment', async () => {
   const securityTask = { description: 'Review authentication middleware' };
-  for (const [selectedModel, modelId, effort] of [['gpt-6-mini', 'gpt-6-astra', 'xhigh'], ['claude-sonnet-5-5', 'claude-opus-5-5', 'max']]) {
+  for (const [selectedModel, modelId, effort] of [['gpt-6-mini', 'gpt-6-astra', 'xhigh'], ['claude-sonnet-5-5', 'claude-opus-5-5', 'xhigh']]) {
     const calls = [];
     const result = await routeTask({ ...base, selectedModel, task: securityTask, judge: async request => {
       calls.push(request); return { choice: request.stage === 'model' ? modelId : effort };
@@ -288,8 +288,8 @@ test('security work requires Astra xhigh or Opus 5.5 max, including explicit mai
   }
 });
 
-test('missing required security model or effort is a blocker, never a downgrade', async () => {
-  for (const models of [catalog.filter(item => item.id !== 'gpt-6-astra'), catalog.map(item => item.id === 'gpt-6-astra' ? { ...item, efforts: ['high'] } : item)]) {
+test('missing required security model or any usable effort is a blocker, never a downgrade', async () => {
+  for (const models of [catalog.filter(item => item.id !== 'gpt-6-astra'), catalog.map(item => item.id === 'gpt-6-astra' ? { ...item, efforts: ['low', 'medium'] } : item)]) {
     let called = false;
     const result = await routeTask({ ...base, catalog: models, task: { risk: 'security' }, judge: async () => { called = true; } });
     assert.equal(result.status, 'required_model_blocked');
@@ -319,14 +319,39 @@ test('catalog preserves exact option IDs and values, with explicit semantic leve
   assert.equal((await routeTask({ ...base, catalog: [{ ...catalog[0], efforts: ['invented'] }] })).status, 'invalid_configuration');
 });
 
-test('host-supported ultra effort remains available without weakening exact security floors', async () => {
-  const hostCatalog = [{ ...catalog[1], efforts: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'] }];
-  const result = await routeTask({ ...base, catalog: hostCatalog,
-    judgment: { modelId: 'gpt-6-astra', effort: 'ultra', reason: 'Main selected a supported option for a complex ordinary task.' } });
-  assert.equal(result.status, 'routed');
-  assert.equal(result.route.effort, 'ultra');
-  assert.equal(validateRoute({ ...base, catalog: hostCatalog, task: { risk: 'security' },
-    route: { modelId: 'gpt-6-astra', effort: 'ultra' } }).valid, false);
+test('reviews cap at xhigh for every model, even when the host offers max or ultra', async () => {
+  const hostCatalog = [{ ...catalog[1], efforts: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'] }, { ...catalog[4], efforts: ['low', 'high', 'xhigh', 'max'] }];
+  for (const [selectedModel, modelId] of [['gpt-6-astra', 'gpt-6-astra'], ['claude-opus-5-5', 'claude-opus-5-5']]) {
+    for (const reviewTask of [task, { risk: 'security' }, { description: 'Unknown scope' }]) {
+      const input = { ...base, catalog: hostCatalog, selectedModel, task: reviewTask };
+      assert.equal(validateRoute({ ...input, route: { modelId, effort: 'xhigh' } }).valid, true);
+      for (const effort of ['max', 'ultra']) assert.equal(validateRoute({ ...input, route: { modelId, effort } }).valid, false);
+    }
+    const result = await routeTask({ ...base, catalog: hostCatalog, selectedModel, judge: async ({ stage, candidates }) => {
+      if (stage === 'effort') assert.ok(candidates.every(item => ['low', 'medium', 'high', 'xhigh'].includes(item.level)));
+      return { choice: stage === 'model' ? modelId : 'xhigh' };
+    } });
+    assert.equal(result.status, 'routed');
+  }
+});
+
+test('security review without xhigh falls back to the same model at its highest level under the cap', async () => {
+  for (const [efforts, fallback] of [[['low', 'high', 'max'], 'high'], [['high'], 'high']]) {
+    const models = catalog.map(item => item.id === 'claude-opus-5-5' ? { ...item, efforts } : item);
+    const input = { ...base, catalog: models, selectedModel: 'claude-opus-5-5', task: { risk: 'security' } };
+    const result = await routeTask({ ...input, judgment: { modelId: 'claude-opus-5-5', effort: fallback, reason: 'Security fallback' } });
+    assert.equal(result.status, 'routed');
+    assert.equal(result.route.effortFallback, true);
+    for (const effort of efforts.filter(item => item !== fallback)) {
+      assert.equal(validateRoute({ ...input, route: { modelId: 'claude-opus-5-5', effort } }).valid, false, effort);
+    }
+  }
+  const maxOnly = catalog.map(item => item.id === 'claude-opus-5-5' ? { ...item, efforts: ['max'] } : item);
+  const blocked = await routeTask({ ...base, catalog: maxOnly, selectedModel: 'claude-opus-5-5', task: { risk: 'security' } });
+  assert.equal(blocked.status, 'required_model_blocked');
+  const exact = await routeTask({ ...base, selectedModel: 'claude-opus-5-5', task: { risk: 'security' },
+    judgment: { modelId: 'claude-opus-5-5', effort: 'xhigh', reason: 'Exact security route' } });
+  assert.equal(exact.route.effortFallback, undefined);
 });
 
 test('direct TypeSafe transport uses the verified official endpoint and typed model then effort questions', async () => {
@@ -372,4 +397,136 @@ test('malformed probability distributions and tied/inconclusive answers require 
 test('TYPESAFE_API_KEY is the first name checked within one source', () => {
   const credential = resolveCredentials({ env: { JEV_API_KEY: 'jev-fixture-key', TYPESAFE_API_KEY: 'typesafe-fixture-key' } });
   assert.equal(credential.variable, 'TYPESAFE_API_KEY');
+});
+
+const implementationCatalog = [
+  ...catalog,
+  ...['sol', 'terra'].map(name => ({ id: `gpt-6.1-${name}`, family: 'gpt', efforts: ['low', 'high', 'xhigh'], effortOptionId: 'reasoning_effort' })),
+];
+const implementationPlan = {
+  summary: 'Reject the invalid cookie before reading session data.',
+  paths: ['src/session.mjs'],
+  acceptanceCriteria: ['Invalid cookie is rejected; valid session behavior is preserved.'],
+};
+
+test('planned fixes use implementation models in the selected family, including security fixes', async () => {
+  for (const [selectedModel, modelId] of [
+    ['gpt-6-astra', 'gpt-6.1-sol'], ['gpt-6-astra', 'gpt-6.1-terra'],
+    ['claude-opus-5-5', 'claude-sonnet-5-5'], ['claude-opus-5-5', 'claude-haiku-5-5'],
+  ]) {
+    const fix = { kind: 'fix', description: 'Fix authentication cookie validation', plan: implementationPlan };
+    const result = await routeTask({ ...base, catalog: implementationCatalog, selectedModel, task: fix,
+      judgment: { modelId, effort: 'high', reason: 'Bounded implementation with concrete acceptance criteria.' } });
+    assert.equal(result.status, 'routed', modelId);
+    assert.equal(result.audit.risk.security, true);
+    assert.equal(validateRoute({ ...base, catalog: implementationCatalog, selectedModel, task: fix,
+      route: { modelId, effort: 'low' } }).valid, false);
+  }
+});
+
+test('Jev gets the plan and only implementation candidates for planned fixes', async () => {
+  const result = await routeTask({ ...base, catalog: implementationCatalog,
+    task: { kind: 'implementation', description: 'Fix session validation', plan: implementationPlan },
+    judge: async request => {
+      assert.deepEqual(request.task.plan, implementationPlan);
+      if (request.stage === 'model') assert.deepEqual(request.candidates.map(model => model.id), ['gpt-6.1-sol', 'gpt-6.1-terra']);
+      return { choice: request.stage === 'model' ? 'gpt-6.1-terra' : 'high' };
+    } });
+  assert.equal(result.status, 'routed');
+});
+
+test('fixes require a concrete plan before model selection; planning retains security reasoning floor', async () => {
+  for (const plan of [undefined, true, {}, { summary: 'Fix it', paths: [], acceptanceCriteria: [] }]) {
+    let called = false;
+    const result = await routeTask({ ...base, catalog: implementationCatalog, task: { kind: 'fix', risk: 'ordinary', plan },
+      judge: async () => { called = true; } });
+    assert.equal(result.status, 'implementation_plan_required');
+    assert.equal(called, false);
+  }
+  assert.equal(validateRoute({ ...base, catalog: implementationCatalog,
+    task: { kind: 'planning', description: 'Decide authentication cookie policy' },
+    route: { modelId: 'gpt-6.1-sol', effort: 'high' } }).valid, false);
+});
+
+test('planned fixes cannot inherit premium models or silently substitute unavailable implementation models', async () => {
+  for (const [selectedModel, modelId, effort] of [['gpt-6-astra', 'gpt-6-astra', 'xhigh'], ['claude-opus-5-5', 'claude-opus-5-5', 'max']]) {
+    const result = await routeTask({ ...base, catalog: implementationCatalog, selectedModel,
+      task: { kind: 'fix', risk: 'ordinary', plan: implementationPlan },
+      judgment: { modelId, effort, reason: 'Reuse reviewer model' } });
+    assert.equal(result.reason, 'model_not_allowed');
+  }
+  const result = await routeTask({ ...base, task: { kind: 'fix', plan: implementationPlan } });
+  assert.equal(result.status, 'required_model_blocked');
+});
+
+test('ordinary mechanical fixes can use low effort while plan-only security evidence retains High', async () => {
+  const ordinaryPlan = { summary: 'Correct the label.', paths: ['src/label.mjs'], acceptanceCriteria: ['Label reads Save.'] };
+  const input = { ...base, catalog: implementationCatalog, task: { kind: 'fix', risk: 'ordinary', plan: ordinaryPlan } };
+  assert.equal(validateRoute({ ...input, route: { modelId: 'gpt-6.1-sol', effort: 'low' } }).valid, true);
+  assert.equal(validateRoute({ ...input, route: { modelId: 'claude-haiku-5-5', effort: 'high' } }).valid, false);
+  assert.equal(validateRoute({ ...input, task: { ...input.task, plan: implementationPlan },
+    route: { modelId: 'gpt-6.1-sol', effort: 'low' } }).valid, false);
+});
+
+test('fixes cap at High for every model, and security fixes run at exactly High', async () => {
+  const fixCatalog = implementationCatalog.map(item => ['claude-sonnet-5-5', 'claude-haiku-5-5'].includes(item.id)
+    ? { ...item, efforts: ['low', 'medium', 'high', 'xhigh', 'max'] } : item);
+  for (const [selectedModel, modelId] of [['gpt-6-astra', 'gpt-6.1-sol'], ['gpt-6-astra', 'gpt-6.1-terra'],
+    ['claude-opus-5-5', 'claude-sonnet-5-5'], ['claude-opus-5-5', 'claude-haiku-5-5']]) {
+    for (const fix of [{ kind: 'fix', risk: 'ordinary', plan: { summary: 'Correct the label.', paths: ['src/label.mjs'], acceptanceCriteria: ['Label reads Save.'] } },
+      { kind: 'fix', description: 'Fix authentication cookie validation', plan: implementationPlan },
+      { kind: 'implementation', description: 'Rewrite graph traversal algorithm', plan: implementationPlan }]) {
+      const input = { ...base, catalog: fixCatalog, selectedModel, task: fix };
+      assert.equal(validateRoute({ ...input, route: { modelId, effort: 'high' } }).valid, true, `${modelId} high`);
+      for (const effort of ['xhigh', 'max']) {
+        if (fixCatalog.find(item => item.id === modelId).efforts.includes(effort)) {
+          assert.equal(validateRoute({ ...input, route: { modelId, effort } }).valid, false, `${modelId} ${effort}`);
+        }
+      }
+    }
+  }
+});
+
+const versionCatalog = [
+  ...['claude-opus-5-5', 'claude-opus-6-0-20270115', 'claude-sonnet-4-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-1', 'opus']
+    .map(id => ({ id, efforts: ['low', 'medium', 'high', 'xhigh', 'max'], effortOptionId: 'effort' })),
+  { id: 'gpt-6-astra', efforts: ['high', 'xhigh'], effortOptionId: 'reasoning_effort' },
+  { id: 'host-astra-next', name: 'GPT 6.5 Astra', family: 'gpt', efforts: ['high', 'xhigh'], effortOptionId: 'reasoning_effort' },
+  { id: 'gpt-6.1-sol', efforts: ['low', 'medium', 'high'], effortOptionId: 'reasoning_effort' },
+  { id: 'gpt-6.2-sol', efforts: ['low', 'medium', 'high'], effortOptionId: 'reasoning_effort' },
+  { id: 'gpt-6.1-terra', efforts: ['low', 'medium', 'high'], effortOptionId: 'reasoning_effort' },
+];
+const routineFix = { kind: 'fix', plan: { summary: 'Rename the helper.', paths: ['src/a.mjs'], acceptanceCriteria: ['Tests pass.'] } };
+
+test('only the newest host version of each tier is eligible, matched by tier name and not a fixed version', async () => {
+  const valid = (selectedModel, task, modelId, effort) => validateRoute({ ...base, catalog: versionCatalog, selectedModel, task, route: { modelId, effort } }).valid;
+  assert.equal(valid('claude-opus-5-5', { risk: 'security' }, 'claude-opus-6-0-20270115', 'xhigh'), true);
+  for (const id of ['claude-opus-5-5', 'opus']) assert.equal(valid('claude-opus-5-5', { risk: 'security' }, id, 'xhigh'), false, id);
+  assert.equal(valid('gpt-6-astra', { risk: 'security' }, 'host-astra-next', 'xhigh'), true);
+  assert.equal(valid('gpt-6-astra', { risk: 'security' }, 'gpt-6-astra', 'xhigh'), false);
+  assert.equal(valid('gpt-6-astra', routineFix, 'gpt-6.2-sol', 'medium'), true);
+  assert.equal(valid('gpt-6-astra', routineFix, 'gpt-6.1-terra', 'medium'), true);
+  assert.equal(valid('gpt-6-astra', routineFix, 'gpt-6.1-sol', 'medium'), false);
+  assert.equal(valid('claude-opus-5-5', routineFix, 'claude-sonnet-5-5', 'medium'), true);
+  for (const id of ['claude-sonnet-4-5', 'claude-fable-5-1']) assert.equal(valid('claude-opus-5-5', routineFix, id, 'medium'), false, id);
+  const result = await routeTask({ ...base, catalog: versionCatalog, selectedModel: 'claude-opus-5-5', task: routineFix, judge: async request => {
+    if (request.stage === 'model') assert.deepEqual(request.candidates.map(model => model.id), ['claude-sonnet-5-5', 'claude-haiku-5-5']);
+    return { choice: request.stage === 'model' ? 'claude-haiku-5-5' : 'medium' };
+  } });
+  assert.equal(result.status, 'routed');
+});
+
+test('a tier with no versioned entry keeps its unversioned host aliases', () => {
+  const aliases = [{ id: 'opus', family: 'claude', efforts: ['high', 'xhigh'], effortOptionId: 'effort' }];
+  assert.equal(validateRoute({ ...base, catalog: aliases, selectedModel: 'opus', task: { risk: 'security' }, route: { modelId: 'opus', effort: 'xhigh' } }).valid, true);
+});
+
+test('unclassified planned fixes may use Low or Medium; explicitly uncertain, algorithm, and security fixes need High', () => {
+  const valid = (task, effort) => validateRoute({ ...base, catalog: versionCatalog, selectedModel: 'gpt-6-astra', task, route: { modelId: 'gpt-6.2-sol', effort } }).valid;
+  for (const effort of ['low', 'medium', 'high']) assert.equal(valid(routineFix, effort), true, effort);
+  for (const task of [{ ...routineFix, uncertain: true }, { ...routineFix, algorithm: true }, { ...routineFix, description: 'Fix session cookie parsing' }]) {
+    assert.equal(valid(task, 'medium'), false);
+    assert.equal(valid(task, 'high'), true);
+  }
+  assert.equal(valid({ kind: 'review', description: 'Review the change' }, 'medium'), false);
 });

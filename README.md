@@ -57,8 +57,15 @@ your agent actually offers. It never invents a model.
 rules in [routing.md](skills/review-work/references/routing.md). Everything
 still works. Some rules always apply, with or without Jev:
 
-- Security work (login, permissions, secrets, crypto) always gets the
-  strongest model at the highest effort.
+- Effort caps for every model: reviews go up to extra-high; fixes go up
+  to High. Max and ultra are never used.
+- Models are picked by tier name. Only the newest version of each tier
+  your agent offers is used, so new releases work with no edits.
+- Security review and planning use the newest Astra or Opus at extra-high.
+  If that model has no extra-high, it uses its highest level below that.
+- Once planned, fixes use the newest Sol/Terra or Sonnet/Haiku, chosen for
+  implementation difficulty. Effort can be Low, Medium, or High. Planned
+  security fixes use High.
 - If Jev is down, slow, or unsure, the main agent decides. It never quietly
   falls back to a weaker model.
 
@@ -187,8 +194,8 @@ Use it to review a feature branch (its diff) or a whole codebase.
 - The page runs on `127.0.0.1` only. It never opens a public port.
 - Review records stay on your machine in `~/.agents/state/review-work/`. They
   are never added to your repo.
-- Security work always uses the strongest model and effort. If the chat's own
-  model is weaker, a helper with the right model does that part.
+- Security review and planning use Astra/Opus. Planned fixes use Sol/Terra
+  or Sonnet/Haiku, with a fresh model choice for implementation.
 - **Model routing with Jev is optional.** See
   [Optional: model routing with Jev](#optional-model-routing-with-jev).
 - **Page on another machine (T3 Code only).** In

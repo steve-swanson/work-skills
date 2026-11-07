@@ -7,7 +7,10 @@ runs user notes as commands, changes Git, or opens a PR. Only main picks routes
 (provider, model, effort, and options) and decides. Task records are a log; they
 never start work.
 
-1. Before dispatch, check the exact route against current host capabilities.
+1. Before dispatch, reuse or complete the finding's concrete plan and select a
+   fresh route for this phase, as in [routing.md](routing.md#route-by-task-phase).
+   Use Astra/Opus for unresolved planning; planned fix execution uses Sol/Terra
+   or Sonnet/Haiku in the selected family. Check the exact route against current host capabilities.
    Record it.
 2. Reserve a stable task ID with `task-reserve`. Pass the returned
    `clientRequestId` unchanged to a host with idempotent delegation (one request
@@ -105,7 +108,8 @@ Each brief contains:
 - original user context and resolution
 - owned files and dependency contracts
 - coordinator's current SHA
-- exact model and effort
+- concrete plan: change summary, owned paths, and acceptance checks
+- exact model and effort chosen for this phase
 - commands and product acceptance criteria
 - output fields: commit, checks, concerns, artifacts
 

@@ -110,8 +110,12 @@ Read [routing.md](references/routing.md) first.
   starts the task. Helpers never call Jev or choose routes (model, effort, or
   options). They never start their own helpers unless main gives them an exact,
   fixed assignment to do so.
-- Stay in the chat's model family: GPT models in a GPT chat; Claude Opus 5.5,
-  Sonnet 5.5, or Haiku 5.5 in a Claude chat. Trust the host's model list over
+- Stay in the chat's model family: GPT models in a GPT chat; Claude Opus,
+  Sonnet, or Haiku in a Claude chat.
+- **Always the newest version.** Models are picked by tier name (Astra, Sol,
+  Terra, Opus, Sonnet, Haiku). For each tier, the runtime keeps only the
+  newest version in the host's model list and rejects older ones. Never
+  pick a version from memory. Trust the host's model list over
   guesses. Never invent a model ID or switch providers silently. If the family
   is unknown or a needed model is missing, ask.
 - Jev can pick the model first, then an effort that model supports. It needs a
@@ -124,14 +128,21 @@ Read [routing.md](references/routing.md) first.
 - A configured Jev MCP adapter can make the same two choices. Read its real
   tool schema first; do not assume a `jev_route` tool exists. Without an
   adapter, use the runtime's built-in direct transport.
+- **Effort caps, for every model:** reviews and planning go up to
+  extra-high, never max or ultra. Fixes go up to High. The runtime rejects
+  any route above the cap, from Jev or from main.
 - If Jev is missing or gives an unusable answer, the main agent decides with
   the same rules. There is no fixed fallback table.
   - Read-only listing work: Low is fine.
   - Algorithms or hard reasoning: High or extra-high.
   - Not sure: High.
-  - **Security work** (login, permissions, secrets, crypto, tenant isolation,
-    trust boundaries): **GPT Astra extra-high or Claude Opus 5.5 max**. If a
-    helper finds new security scope, it stops that part and reports to main.
+  - **Security review and planning** (login, permissions, secrets, crypto,
+    tenant isolation, trust boundaries): **newest GPT Astra or newest Claude
+    Opus, at extra-high**. If that model has no extra-high, use the same
+    model at its highest level below the cap (at least High). Do not switch
+    to an older version. If a helper finds new security scope, it stops that part
+    and reports to main.
+    Planned implementation uses the fix routes below, including security fixes.
   - **Inline review when part of it needs a higher route:** do not ask the
     user to change this chat's model or effort. This chat cannot confirm or
     set its own effort. Give that part (for example, the security checks) to
@@ -268,7 +279,28 @@ Read [orchestration.md](references/orchestration.md) and
    checkout with shell commands.
 3. Group fixes that touch the same files. Run independent fixes in parallel,
    within capacity.
-4. Each fix brief has: the finding and its proof, the user's note, owned files,
+4. **Plan, then route implementation afresh.** Reuse the finding's fix idea
+   when it already specifies the change, owned paths, and acceptance checks.
+   Main fills small gaps. If behavior or security decisions remain unresolved,
+   use Astra or Opus for that planning work, then hand the concrete plan to a
+   separately routed fixer. Do not carry the reviewer's model into the fix.
+   - GPT fixes use the **newest Sol or newest Terra**.
+   - Claude fixes use the **newest Sonnet or newest Haiku**.
+   - Pick the least costly model adequate for the implementation: Haiku for
+     mechanical, fully specified edits; Sonnet, Sol, or Terra for work needing
+     more code judgment. Pick the lowest effort that fits the plan: Low for
+     mechanical edits, Medium for typical bounded fixes, High for fixes that
+     need real code judgment. High is the cap. Security, algorithm, and
+     explicitly uncertain fixes use High. Stay within the chat's family and use exact
+     available host IDs. A missing implementation model is a blocker.
+   - Give the runtime `kind: "fix"` (or `"implementation"`) and a `plan` with
+     `summary`, nonempty `paths`, and nonempty `acceptanceCriteria`. Include
+     concrete changes and regression checks. A Small/Medium/Large label alone
+     is insufficient. Use `kind: "planning"` for unresolved design work.
+   - If implementation reveals an unresolved decision or new scope, return it
+     to main for planning, then reroute implementation with the updated plan.
+
+   Each fix brief has: the finding and its proof, the user's note, owned files,
    checks to pass, base SHA, model, effort, and a stable dispatch key.
 5. Read every result and diff yourself. Then merge one task at a time:
    1. Rebase the next unpushed task branch onto the coordinator's newest HEAD.

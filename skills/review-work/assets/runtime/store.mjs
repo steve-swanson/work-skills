@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 
-export const VERSION = '1.1.5';
+export const VERSION = '1.2.0';
 const SCHEMA_VERSION = 1;
 const DECISIONS = new Set(['fix', 'dont_fix', 'clarify']);
 const LABELS = new Set(['issue', 'question', 'suggestion', 'nitpick', 'praise', 'todo', 'thought', 'chore', 'note', 'typo', 'polish', 'quibble']);
