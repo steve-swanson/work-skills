@@ -32,11 +32,15 @@ skipped. Skills resolve dependencies through the host's installed skill catalog.
 
 You need Node.js 22.20 or later for the installer.
 
-```bash
-# All five skills, available in every project
-npx skills add steve-swanson/work-skills -g
+All five skills, available in every project:
 
-# Interactive review and its dependencies
+```bash
+npx skills add steve-swanson/work-skills -g
+```
+
+Interactive review and its dependencies:
+
+```bash
 npx skills add steve-swanson/work-skills --skill review-work review-loop watch-pr -g
 ```
 
