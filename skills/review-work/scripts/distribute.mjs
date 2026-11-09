@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { gzipSync, gunzipSync } from 'node:zlib';
 
-export const SKILLS = Object.freeze(['plan-work', 'execute-work', 'review-work']);
+export const SKILLS = Object.freeze(['plan-work', 'execute-work', 'review-work', 'review-loop', 'watch-pr']);
 const FORMAT = 'review-work-skill-bundle';
 const MAX_BYTES = 128 * 1024 * 1024;
 const MAX_FILES = 20000;
@@ -67,13 +67,13 @@ function exactKeys(value, keys, label) {
 /** Validate every payload before any target mutation. Returns decoded files. */
 export function validateBundle(bundle) {
   exactKeys(bundle, ['format', 'version', 'manifest', 'manifestDigest', 'contents'], 'bundle');
-  if (bundle.format !== FORMAT || bundle.version !== 1) throw new Error('Unsupported bundle format or version.');
+  if (bundle.format !== FORMAT || bundle.version !== 2) throw new Error('Unsupported bundle format or version; rebuild the five-skill bundle with its matching installer.');
   exactKeys(bundle.manifest, ['algorithm', 'skills', 'files'], 'manifest');
   const manifest = bundle.manifest;
   if (manifest.algorithm !== 'sha256' || JSON.stringify(manifest.skills) !== JSON.stringify(SKILLS)) {
-    throw new Error('Manifest must describe the complete approved three-skill suite using SHA-256.');
+    throw new Error('Manifest must describe the complete approved five-skill suite using SHA-256.');
   }
-  if (!Array.isArray(manifest.files) || manifest.files.length < 3 || manifest.files.length > MAX_FILES) {
+  if (!Array.isArray(manifest.files) || manifest.files.length < SKILLS.length || manifest.files.length > MAX_FILES) {
     throw new Error('Invalid manifest file count.');
   }
   if (!bundle.contents || typeof bundle.contents !== 'object' || Array.isArray(bundle.contents)) {
@@ -185,7 +185,7 @@ export async function buildBundle({ skillsRoot }) {
   entries.sort((a, b) => compare(a.path, b.path));
   const manifest = { algorithm: 'sha256', skills: [...SKILLS], files: entries };
   const bundle = {
-    format: FORMAT, version: 1, manifest, manifestDigest: sha256(JSON.stringify(manifest)),
+    format: FORMAT, version: 2, manifest, manifestDigest: sha256(JSON.stringify(manifest)),
     contents: Object.fromEntries(entries.map(entry => [entry.path, contents[entry.path]])),
   };
   validateBundle(bundle);

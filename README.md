@@ -1,27 +1,43 @@
 # work-skills
 
-Three agent skills that take a piece of code work from idea to pull request:
+Five agent skills for planning, implementation, review, and PR validation:
 
-**[plan-work](#plan-work)** &nbsp;·&nbsp; **[execute-work](#execute-work)** &nbsp;·&nbsp; **[review-work](#review-work)**
+**[plan-work](#plan-work)** &nbsp;·&nbsp; **[execute-work](#execute-work)** &nbsp;·&nbsp; **[review-work](#review-work)** &nbsp;·&nbsp; **[review-loop](#review-loop)** &nbsp;·&nbsp; **[watch-pr](#watch-pr)**
 
 | Skill | What it does | Changes code? |
 | --- | --- | --- |
 | [plan-work](skills/plan-work/SKILL.md) | Investigates a ticket or request and writes a complete implementation plan. | No, read-only |
 | [execute-work](skills/execute-work/SKILL.md) | Carries out an approved plan with subagents in separate Git worktrees, then opens one pull request. | Yes |
 | [review-work](skills/review-work/SKILL.md) | Reviews a branch or codebase, shows the findings on a local web page, and fixes only what you approve. | Only approved fixes |
+| [review-loop](skills/review-loop/SKILL.md) | Runs a small independent review and returns findings to the worker for up to three rounds. | Scoped local fixes |
+| [watch-pr](skills/watch-pr/SKILL.md) | Validates PRs, repairs CI/review failures, and checks merge CI before cleanup. | Scoped repairs and PR replies |
 
-They work on their own or as a loop: **plan → execute → review**.
+The usual flow is **plan → execute → review-loop → PR → watch-pr**.
+Interactive review-work remains available for user-directed reviews.
+
+### Some skills call others
+
+Install their dependencies too; selective skill installation does not resolve
+these dependencies automatically:
+
+- `execute-work` requires `review-loop` and `watch-pr`.
+- `review-work` requires `review-loop` (shared guidance) and `watch-pr`.
+- `watch-pr` requires `review-loop`.
+- `plan-work` and `review-loop` have no skill dependencies.
+
+A missing dependency is reported before work starts; review is never silently
+skipped. Skills resolve dependencies through the host's installed skill catalog.
 
 ## Install
 
 You need Node.js 22.20 or later for the installer.
 
 ```bash
-# All three skills, available in every project
+# All five skills, available in every project
 npx skills add steve-swanson/work-skills -g
 
-# Just one skill
-npx skills add steve-swanson/work-skills --skill review-work -g
+# Interactive review and its dependencies
+npx skills add steve-swanson/work-skills --skill review-work review-loop watch-pr -g
 ```
 
 The installer asks which coding agents to install to (for example Claude Code
@@ -39,8 +55,11 @@ npx skills update
 - A coding agent that can start subagents, such as Claude Code, Codex, or
   T3 Code.
 - Git. execute-work and review-work make branches and worktrees.
-- Node.js 24 or later for review-work's local page and records.
-- The GitHub CLI (`gh`) to open pull requests.
+- Node.js 24 or later for review-work's page/records and watch-pr's portable helper.
+- Authenticated GitHub CLI (`gh`) for PR operations and the GitHub.com watcher.
+- Terminal monitoring needs a host that supports long-running execution or event
+  notifications. A helper cannot itself resume an agent; unsupported hosts report
+  the limitation. T3 uses its native watcher for open PRs.
 
 ## Optional: model routing with Jev
 
@@ -150,10 +169,14 @@ Use it when the work is defined and approved.
 1. Makes one coordinating branch from `develop`, with a clear name.
 2. Splits the work by deliverable and file ownership, and gives each part to a
    subagent in its own Git worktree.
-3. Checks each finished part against its acceptance criteria and checks.
-4. Merges the parts one at a time with fast-forward merges only.
-5. Removes the worktrees and branches it made, and opens one ready-for-review
-   pull request into `develop`.
+3. Gives each finished part a small, independent PASS/FAIL review with
+   Conventional Comments. The worker processes the findings; blocking issues
+   go through fixes and re-review, while optional feedback stays discretionary.
+4. Reviews each part against the current coordinating tip, then merges the
+   passing commit with a fast-forward merge. Reviews run without user triage.
+5. Removes temporary task worktrees/branches and opens one PR into `develop`.
+6. Automatically invokes watch-pr to repair CI/review failures and report readiness.
+   Keeps the coordinator for explicit post-merge validation and cleanup.
 
 **What it never does**
 
@@ -187,7 +210,8 @@ Use it to review a feature branch (its diff) or a whole codebase.
    and light and dark themes are built in.
 4. When you click **Submit**, it fixes only the findings you approved, with
    subagents in separate worktrees, and opens one pull request.
-5. Ends with a report: a table of every finding, your choice, and the result.
+5. Invokes watch-pr automatically for CI/review feedback within the approved
+   scope, then reports every finding, your choice, and the result.
 
 **Good to know**
 
@@ -210,6 +234,49 @@ Use it to review a feature branch (its diff) or a whole codebase.
 
 </details>
 
+<a id="review-loop"></a>
+<details>
+<summary><strong>review-loop</strong> — small review, worker response, focused recheck</summary>
+
+- One independent read-only reviewer at a time, with three rounds total.
+- Uses Conventional Comments; workers can decline optional feedback with reasons.
+- Blocking findings need a fix or an evidence-backed objection accepted on recheck.
+- PASS applies to the exact reviewed base/candidate commits. Exhaustion is FAIL.
+- Uses the caller's model settings by default, with no required model vendor.
+- Reuses the existing worker; standalone callers handle their own fixes.
+
+> Use review-loop to review this committed change against its acceptance criteria.
+
+See [review scenarios](skills/review-loop/evals/scenarios.md). Workflow ideas
+were informed by [sol-loop](https://github.com/t3dotgg/tstack/blob/main/skills/sol-loop/SKILL.md).
+
+</details>
+
+<a id="watch-pr"></a>
+<details>
+<summary><strong>watch-pr</strong> — validate PRs, repair failures, finish after merge</summary>
+
+Both PR-producing skills invoke this automatically unless opted out. It verifies
+CI and feedback, sends valid failures back to the worker, reviews repairs, pushes
+them to the same open PR, and reports readiness. You merge the PR.
+
+After merge, invoke it again:
+
+> Use watch-pr for https://github.com/owner/repo/pull/123 after merge.
+
+It verifies CI for the actual merge commit, opens and watches a repair PR if
+needed, and safely cleans up unchanged, merged run-owned checkouts after success.
+It never merges PRs, deploys, force-pushes, or changes T3 auto-settle settings.
+Turning off auto-settle does not create post-merge CI wakeups. In T3, pending
+post-merge runs require explicit resume because its PR watcher handles open PRs.
+
+The portable Node helper supports terminal hosts. See
+[monitoring](skills/watch-pr/references/monitoring.md) for commands, exit codes,
+state, and host limitations. The observation/repair split was informed by
+[babysit-pr](https://github.com/t3dotgg/tstack/blob/main/skills/babysit-pr/SKILL.md).
+
+</details>
+
 ## Repository layout
 
 ```text
@@ -217,12 +284,14 @@ skills/
   plan-work/      SKILL.md
   execute-work/   SKILL.md
   review-work/    SKILL.md, references/, assets/runtime/, scripts/, tests/
+  review-loop/    SKILL.md, references/, evals/
+  watch-pr/       SKILL.md, references/, scripts/, tests/
 ```
 
-review-work's tests use only Node's built-in test runner:
+Tests use Node's built-in test runner:
 
 ```bash
-node --test skills/review-work/tests/*.test.mjs
+node --test skills/review-work/tests/*.test.mjs skills/watch-pr/tests/*.test.mjs
 ```
 
 ## License

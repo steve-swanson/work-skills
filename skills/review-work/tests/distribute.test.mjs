@@ -11,10 +11,27 @@ import {
   buildBundle, writeBundle, readBundle, installBundle, verifyBundle,
 } from '../scripts/distribute.mjs';
 
-const skills = ['plan-work', 'execute-work', 'review-work'];
+const skills = ['plan-work', 'execute-work', 'review-work', 'review-loop', 'watch-pr'];
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const run = promisify(execFile);
 const helper = fileURLToPath(new URL('../scripts/distribute.mjs', import.meta.url));
+
+test('real five-skill bundle includes dependency references and watcher helper', async () => {
+  const skillsRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const bundle = await buildBundle({ skillsRoot });
+  assert.equal(bundle.version, 2);
+  assert.deepEqual(bundle.manifest.skills, skills);
+  for (const relative of ['review-loop/references/review-code.md', 'watch-pr/scripts/watch.mjs']) {
+    assert.equal(Buffer.from(bundle.contents[relative], 'base64').toString('utf8'),
+      await readFile(path.join(skillsRoot, relative), 'utf8'));
+  }
+  const old = structuredClone(bundle); old.version = 1;
+  const root = await mkdtemp(path.join(tmpdir(), 'old-bundle-test-'));
+  try {
+    await assert.rejects(installBundle({ bundle: old, home: root }), /rebuild.*five-skill/);
+    assert.deepEqual(await readdir(root), []);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(tmpdir(), 'review-distribute-test-'));
@@ -41,7 +58,7 @@ test('bundle is deterministic, excludes runtime/private files, and round-trips J
   }
   const bundle = await buildBundle({ skillsRoot: f.source });
   assert.deepEqual(bundle, f.bundle);
-  assert.equal(bundle.manifest.files.length, 6);
+  assert.equal(bundle.manifest.files.length, skills.length * 2);
   for (const ext of ['json', 'json.gz']) {
     const output = path.join(f.root, `suite.${ext}`);
     const report = await writeBundle({ skillsRoot: f.source, output });

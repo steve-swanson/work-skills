@@ -1,4 +1,4 @@
 interface:
   display_name: "Review Work"
-  short_description: "Interactive code review and coordinated fixes"
+  short_description: "Interactive review, approved fixes, and PR validation"
   default_prompt: "Use $review-work to review this branch, triage findings on a page, and collect approved fixes in one PR."

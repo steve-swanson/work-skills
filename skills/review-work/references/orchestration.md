@@ -184,10 +184,12 @@ After the PR opens:
 
 - When T3 requires PR linking, `link_pull_request` is the next tool call after
   you create, take over, or push the PR.
-- Leave the PR open, ready for review.
-- This skill allows merge monitoring only for post-merge coordinator cleanup.
-  Follow the host's watch, unwatch, and handoff rules.
-- Verify a real merge-event wake-up before claiming automatic cleanup. If none
-  exists, save the deferred cleanup and the manual-resume instruction.
-- No deploy or PR merge is allowed.
-- Task completion and post-merge cleanup are separate saved states.
+- Invoke watch-pr in main with the plan, approved/declined findings, routing
+  constraints, worker identities, checks, and owned inventory unless opted out.
+  It owns PR validation and review-loop repairs; never let a child watch.
+- Keep this journal accurate as PR validation repairs and cleanup occur.
+- Leave the PR open; no deployment or PR merge is allowed.
+- After explicit post-merge invocation, watch-pr verifies merge-commit CI before
+  applying this run's guarded cleanup procedure. Keep completion and post-merge
+  validation/cleanup as separate saved states. Do not promise a merge wakeup
+  from an open-PR checks watcher.

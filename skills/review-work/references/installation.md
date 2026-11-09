@@ -68,6 +68,8 @@ Canonical skill directories:
 <home>/.agents/skills/plan-work/
 <home>/.agents/skills/execute-work/
 <home>/.agents/skills/review-work/
+<home>/.agents/skills/review-loop/
+<home>/.agents/skills/watch-pr/
 ```
 
 The helper writes only these folders. It never creates, changes, or removes
@@ -104,7 +106,7 @@ It first resolves home-folder aliases to the real path, such as macOS `/var` thr
 
 ## What a bundle holds
 
-Only regular files inside the three named skills. No empty directories, source ownership, timestamps, or executable permission bits. The decoded suite is limited to 128 MiB and 20,000 files.
+Only regular files inside the five named skills. No empty directories, source ownership, timestamps, or executable permission bits. The decoded suite is limited to 128 MiB and 20,000 files.
 
 The helper skips known private and runtime names: `.env` and `.env.*`, secret/credential names, private-key extensions, database files and sidecars, log files, state/temp/cache folders, `node_modules`, VCS folders, Python bytecode, coverage, and `.DS_Store`.
 
@@ -116,26 +118,34 @@ The helper skips known private and runtime names: `.env` and `.env.*`, secret/cr
 
 ## Bundle file format
 
+The expanded five-skill suite uses bundle version 2. Version 1 bundles need
+their original installer; rebuild from the current source and use the matching
+helper to distribute all five skills. Do not mix helper versions.
+
 The file is UTF-8 JSON, optionally gzip-compressed. Gzip is detected from the file's first bytes, not its name. Top-level keys are exact; unknown fields are rejected.
 
 ```json
 {
   "format": "review-work-skill-bundle",
-  "version": 1,
+  "version": 2,
   "manifest": {
     "algorithm": "sha256",
-    "skills": ["plan-work", "execute-work", "review-work"],
+    "skills": ["plan-work", "execute-work", "review-work", "review-loop", "watch-pr"],
     "files": [
       {"path": "execute-work/SKILL.md", "size": 123, "sha256": "64 lowercase hexadecimal characters"},
       {"path": "plan-work/SKILL.md", "size": 456, "sha256": "64 lowercase hexadecimal characters"},
-      {"path": "review-work/SKILL.md", "size": 789, "sha256": "64 lowercase hexadecimal characters"}
+      {"path": "review-loop/SKILL.md", "size": 321, "sha256": "64 lowercase hexadecimal characters"},
+      {"path": "review-work/SKILL.md", "size": 789, "sha256": "64 lowercase hexadecimal characters"},
+      {"path": "watch-pr/SKILL.md", "size": 654, "sha256": "64 lowercase hexadecimal characters"}
     ]
   },
   "manifestDigest": "64 lowercase hexadecimal characters",
   "contents": {
     "execute-work/SKILL.md": "canonical base64 file bytes",
     "plan-work/SKILL.md": "canonical base64 file bytes",
-    "review-work/SKILL.md": "canonical base64 file bytes"
+    "review-loop/SKILL.md": "canonical base64 file bytes",
+    "review-work/SKILL.md": "canonical base64 file bytes",
+    "watch-pr/SKILL.md": "canonical base64 file bytes"
   }
 }
 ```
@@ -146,7 +156,7 @@ The file is UTF-8 JSON, optionally gzip-compressed. Gzip is detected from the fi
 - `contents` keys match those paths exactly.
 - Each file entry has exactly `path`, `size`, and `sha256`.
 
-`manifestDigest` is the SHA-256 of UTF-8 `JSON.stringify({algorithm: "sha256", skills: ["plan-work", "execute-work", "review-work"], files})`, with each file entry rebuilt in the property order `path`, `size`, `sha256`. The bundle has no timestamps or host-specific paths, so identical source file bytes and portable paths give the same manifest digest on every host.
+`manifestDigest` is the SHA-256 of UTF-8 `JSON.stringify({algorithm: "sha256", skills: ["plan-work", "execute-work", "review-work", "review-loop", "watch-pr"], files})`, with each file entry rebuilt in the property order `path`, `size`, `sha256`. The bundle has no timestamps or host-specific paths, so identical source file bytes and portable paths give the same manifest digest on every host.
 
 ## Output and exit codes
 

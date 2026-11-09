@@ -13,8 +13,10 @@ The **main agent** (the chat that runs this skill) is in charge. It sets the
 scope, picks the model for every helper agent, saves all records, and checks
 all results. Helper agents do the job they are given and report back.
 
-This skill works next to `plan-work` and `execute-work`. It does not call or
-change them.
+This skill works next to `plan-work` and `execute-work`. It requires
+`review-loop` for shared review guidance and `watch-pr` for PR validation.
+Resolve both from the installed skill catalog before starting; report a missing
+dependency rather than silently omitting it. It does not invoke execute-work.
 
 ## Words used here
 
@@ -54,8 +56,9 @@ change them.
   it gets the final report.
 - Submitting **Fix** (on the page, or a clear "fix it" in chat) allows task
   worktrees, commits, merges into the coordinator branch, safe cleanup, push,
-  and one ready-for-review PR. It also allows watching that PR for its merge,
-  and then removing this run's unchanged, merged coordinator worktree and local
+  and one ready-for-review PR. It also allows scoped PR validation repairs,
+  evidence-backed replies, watching that PR, and after successful merge CI,
+  removing this run's unchanged, merged coordinator worktree and local
   branch on the review machine.
 - If the user says "local only" or "no PR", follow that.
 - Never merge the PR, turn on auto-merge, or deploy.
@@ -103,7 +106,11 @@ change them.
 
 ## Step 3: Pick models, then review
 
-Read [routing.md](references/routing.md) first.
+Read [routing.md](references/routing.md) and the installed review-loop skill's
+`references/review-code.md` first. Give the shared reference to reviewer helpers.
+Use its inspection and Conventional Comments guidance without invoking the
+noninteractive fix loop during initial interactive review. Keep this skill's
+routing, coverage records, user decisions, and page format.
 
 - The main agent picks the exact model **and** effort for every review and fix
   task. It checks that the host offers them, then records the choice before it
@@ -153,10 +160,8 @@ Read [routing.md](references/routing.md) first.
     start a helper at the required model and effort: then explain the gap and
     offer to keep this chat's model. Record that choice once for this review
     and do not ask again. This never lowers the rule for fanout helpers.
-- Split the review by behavior and by files. Follow flows across files. Hunt
-  for ways the code breaks: wrong results, broken rules, lost data, missing
-  checks, and compatibility breaks. Check each concern against the
-  requirements and the code that really runs. Merge duplicates.
+- Split the review by behavior and file ownership, following the shared
+  review-code guidance for tracing effects and validating findings.
 - Record coverage: what you **checked**, **skipped**, and could **not finish**,
   with paths, SHA, reason, and proof. "No findings" does not mean every file was
   checked. Do not call the review complete while important coverage is not
@@ -168,21 +173,11 @@ The user decides from the finding text alone, so the text must be short, exact,
 and plain. Read [writing-findings.md](references/writing-findings.md). Give its
 path to every reviewer helper and tell it to follow it.
 
-Use Conventional Comments labels such as `issue`, `question`, `suggestion`, and
-`nitpick`. Mark each finding `blocking` or `non-blocking`. Each finding has
-four parts:
-
-- **Title:** what goes wrong, as a plain sentence of 80 characters or less.
-  "Retrying a payment can create two invoices", not "Non-idempotent invoice
-  creation path".
-- **Why it matters** (`discussion`): who or what gets hurt, when, and how often.
-- **Proof** (`evidence`, plus an optional code `excerpt`): `path:line`, the
-  code path or steps, and how you know.
-- **Fix idea** (`suggestion`): starts with Small fix, Medium fix, or Large fix,
-  then says what to change.
-
-If you are not sure, write a `question`. Never present a guess as a confirmed
-`issue`. Give each finding a stable ID, the path and line, and the reviewed SHA.
+Use the labels, severity, evidence rules, and stable IDs from the shared
+review-code reference. Adapt each finding to the page's title, discussion,
+evidence/excerpt, suggestion, location, and reviewed SHA fields as described in
+writing-findings.md. User decisions remain authoritative; shared guidance does
+not authorize unapproved interactive-review fixes.
 
 Before you load findings, run the clarity check in writing-findings.md on each
 one. Rewrite any that fail, and keep every fact.
@@ -351,35 +346,26 @@ Read [orchestration.md](references/orchestration.md) and
 4. Save the PR and check results. Close the triage phase. Keep the page and
    records so the review can reopen.
 
-## Step 8: Clean up after the PR merges
+## Step 8: Validate the PR and finish after merge
 
-Follow [cleanup.md](references/cleanup.md#post-merge-coordinator-cleanup).
+Automatically invoke `watch-pr` in this main chat after creating/updating the
+PR unless the user opts out. Pass the plan, approved fixes and Don't fix notes,
+worker identities, routing constraints, actual checks, PR/head SHA, and complete
+run-owned inventory. PR validation repairs must preserve the approved behavior;
+new scope or reversing a user decision requires clarification. Do not create a
+second PR for ordinary open-PR repairs.
 
-1. Save the PR URL, repo, base, head, pushed SHA, review machine, coordinator
-   details, and chat ID.
-2. Check GitHub's **Automatically delete head branches** setting. It deletes the
-   remote branch after merge, never the local one. If it is off or blocked, say
-   so. Do not change repo settings unless asked.
-3. Watch for the merge only with a host watch that really wakes you on merge. A
-   checks or reviews watch, or a linked PR, is not enough. Record the real
-   watch ID. On wake, read the PR state again. If no such watch exists, record
-   **post-merge cleanup deferred**. Then tell the user to say **"Clean up the
-   merged review"** in this chat after the merge. Never poll in a loop, build a
-   public webhook, or claim a watcher runs when it does not.
-4. After a confirmed merge, clean up on the machine and repo that ran the
-   review, even if the chat is viewed from another machine:
-   1. Check first. Keep everything, and report the exact reason, if the PR
-      closed without a merge, or the branch has newer commits, or the worktree
-      has uncommitted changes, or the owner is unknown, or the machine is
-      offline.
-   2. Only then remove the clean, run-owned coordinator worktree through its
-      manager.
-   3. Then delete the exact local branch, only if it is unchanged and still
-      points at the merged commit.
-   4. For squash or rebase merges, `git branch -d` can refuse. Use the guarded
-      steps in cleanup.md.
-   5. Running cleanup twice must be safe.
-5. Keep the review database, reports, and chat.
+watch-pr owns CI/review feedback and its worker/review-loop repair cycle. Keep
+this review's journal and page progress accurate, including later repair tasks
+and their cleanup. Preserve the coordinator while the PR is open.
+
+After the user merges, explicitly invoke watch-pr for the confirmed merge
+commit's CI and post-merge cleanup. Also accept “Clean up the merged review” as
+that invocation. Provide [cleanup.md](references/cleanup.md#post-merge-coordinator-cleanup)
+for this run's guarded cleanup procedure, including squash/rebase merges.
+Keep the review database, reports, and chat. Do not change T3 auto-settle or
+remote branch-deletion settings. If no genuine merge/CI wakeup is available,
+record post-merge work as deferred and give the explicit resume instruction.
 
 ## Final report
 
@@ -421,8 +407,7 @@ Use this for chat updates, task briefs, PR text, and reports. Findings follow
 ## Updating and sharing this skill
 
 Use [installation.md](references/installation.md). Keep the same versions of
-`plan-work`, `execute-work`, and `review-work` on each chosen machine. Each skill
+`plan-work`, `execute-work`, `review-work`, `review-loop`, and `watch-pr` on each chosen machine. Each skill
 lives in `.agents/skills/<name>`. The installer never touches `.claude`; the
 user links `.claude/skills` to `.agents/skills` once.
-Keep conflicting installs (back them up, never delete them), and do not change
-how `plan-work` or `execute-work` behave. Never bundle review records or keys.
+Keep conflicting installs (back them up, never delete them), and preserve unrelated skills and shared links. Never bundle review records or keys.

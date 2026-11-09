@@ -7,7 +7,7 @@ description: Use when the user asks to execute an approved implementation plan o
 
 Execute the agreed work autonomously on one meaningful branch from `develop`.
 Delegate implementation to subagents in separate worktrees, then fast-forward
-their completed branches into that coordinating branch, clean up, and open a
+their reviewed branches into that coordinating branch, clean up, and open a
 ready-for-review pull request from the completed coordinating branch into
 `develop`.
 
@@ -17,10 +17,15 @@ removal of clean, fully integrated task worktrees and branches, pushing the
 completed coordinating branch, and creating its PR into `develop`. Proceed
 without another confirmation for those actions. Follow the user's scope and
 repository instructions, including an explicit local-only or no-PR override.
+Scoped CI/review repairs, PR replies, and watch-pr monitoring are included.
 Merging the PR and deployment are outside this skill's authorization. Keep any
 existing prohibitions in force.
 
 ## 1. Prepare the coordinating branch
+
+Requires `review-loop` and `watch-pr`; resolve both SKILL.md files from the
+host's installed skill catalog before starting work. Report a missing dependency
+instead of duplicating instructions or skipping review.
 
 Read the agreed plan, applicable `AGENTS.md`, and required project guidance.
 If the work is already defined, execute without another design or approval
@@ -71,11 +76,17 @@ report that limitation instead of silently substituting solo execution.
 
 ## 3. Review completed tasks
 
-Inspect each task's actual diff and commits against its acceptance criteria.
-Address failures with the owning agent. Require a clean task checkout, completed
-commits, and relevant passing checks before integration; report pre-existing or
-environmental blockers accurately. Do not merge work merely because an agent
-reports completion.
+Require a clean task checkout, committed work, and relevant passing checks.
+
+After aligning the task with the current coordinating tip in step 4, invoke
+`review-loop` in this coordinator with the task brief, worker identity, checkout,
+acceptance criteria, repository guidance, exact base/candidate SHAs, check results,
+and any previous findings. It returns feedback to that worker and owns the
+three-round review budget. No extra supervisor or interactive review page.
+
+Record its result, SHAs, and dispositions in the task checklist. Integrate only
+PASS. Keep failed or blocked work for resolution; do not silently skip it or
+restart the same failed loop to obtain a fresh budget.
 
 ## 4. Integrate serially with fast-forward merges
 
@@ -86,19 +97,27 @@ branch onto the updated coordinating branch before merging. Resolve conflicts
 against the agreed requirements, preserving already integrated behavior; rerun
 affected checks after rebasing or resolving conflicts.
 
+Run the step 3 review loop on this aligned task. Keep the coordinating tip
+fixed during its final review and merge; other workers can continue independently.
+Before merging, verify the coordinating and task tips still match the recorded
+passing base and candidate SHAs, and the task checkout is clean. If either tip
+changed, realign, rerun affected checks, and review again.
+
 Example using recorded absolute paths and branch names:
 
 ```bash
 git -C "$task_path" rebase "$work_branch"
 git -C "$task_path" status --short
-# Run the required checks in task_path, then verify ancestry.
+# Run required checks and the step 3 review loop in task_path.
+# Verify both tips match the passing review, then verify ancestry.
 git -C "$work_path" merge-base --is-ancestor HEAD "$task_branch"
 git -C "$work_path" merge --ff-only "$task_branch"
 ```
 
 Inspect each command's result before continuing. If fast-forward fails,
-reinspect ancestry and rebase again as needed. Do not substitute a merge
-commit, squash, cherry-pick, force push, or reset of the coordinating branch.
+reinspect ancestry and rebase, check, and review again as needed. Do not
+substitute a merge commit, squash, cherry-pick, force push, or reset of the
+coordinating branch.
 If safe resolution requires a product decision, retain both branches and ask.
 After each successful task integration and its required checks, perform the
 required cleanup below for that task immediately. Review the combined work
@@ -184,8 +203,16 @@ inspecting persisted state, not another list of repository test commands.
 Prefer local Git for the push and an available repository connector for PR
 creation; use an authenticated CLI when appropriate. Verify the PR's actual
 base, head, and published commit against the completed coordinating branch.
-Attach every created PR to the current chat when the artifact attachment tool
-is available. Leave the PR open for review.
+Attach every created or updated PR to the current chat using the host's required
+linking tool as the next call after creation/push. Leave the PR open for review.
+
+Invoke `watch-pr` automatically after creating/updating the PR unless the user
+opts out. Pass the plan, worker identities, review dispositions, checks, published
+SHA, and run-owned inventory. It handles valid CI/review failures through the
+workers and review-loop, then revalidates the updated PR. Report completion only
+when ready or explicitly blocked; while waiting, follow the host watcher handoff.
+It never merges the PR. Retain the coordinator for explicit post-merge watch-pr
+validation and cleanup; do not change T3 auto-settle settings.
 
 If pushing or PR creation is blocked, preserve the completed coordinating
 branch/worktree and report the exact blocker and remaining action. Do not

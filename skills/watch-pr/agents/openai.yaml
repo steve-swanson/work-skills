@@ -1,0 +1,4 @@
+interface:
+  display_name: "Watch PR"
+  short_description: "Validate PRs, repair failures, and verify merge CI"
+  default_prompt: "Use $watch-pr to handle this PR's CI and review feedback until ready, or verify its merge CI and clean up after merge."
