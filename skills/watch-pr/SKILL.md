@@ -6,7 +6,8 @@ description: Watch a published PR through CI and review, send valid failures bac
 # Watch PR
 
 Run in the PR-owning coordinator, not a reviewer or delegated child. Requires
-`review-loop`; resolve it from the installed skill catalog before repairs and
+`model-routing` and `review-loop`; resolve them from the installed skill catalog
+before repairs and
 report a missing dependency rather than bypassing review. execute-work and
 review-work invoke this automatically after
 creating or updating their PR unless the user opts out. Invocation authorizes
@@ -18,7 +19,8 @@ Preserve existing scope, model, approval, and user-declined finding decisions.
 ## 1. Recover context and inspect first
 
 Read the caller's plan, worker identities, findings/dispositions, checks, and
-run-owned branch/worktree inventory. Save the repository, PR URL, base/head,
+run-owned branch/worktree inventory, model-routing decisions, actual worker
+families, capability evidence, and retained `{family, choice}` frontend preference. Save the repository, PR URL, base/head,
 published SHA, host, and exact owned coordinator path/branch/management identity
 with its final local SHA. For standalone use, discover these; unknown ownership
 never authorizes cleanup. Keep this record in the caller's task notes outside
@@ -41,7 +43,12 @@ helper. Its status is evidence for the agent, not an unconditional approval.
 2. Send valid findings and failing-run evidence to the original worker when
    available. Otherwise handle the scoped repair in the caller or a replacement
    worker with a complete brief. Respect the caller's file ownership and model
-   rules. An original task checkout may already have been removed: reassign the
+   rules. Route replacement workers or changed implementation assignments
+   through model-routing. Preserve the run's frontend preference and ask again
+   only if the user changes it or execution family changes. Record the actual
+   implementing family, so review-loop can choose an eligible opposite reviewer
+   or same-family fallback based on host capabilities. An original task checkout
+   may already have been removed: reassign the
    worker to the coordinator or a new run-owned repair checkout, never its
    deleted path. Every repair brief includes the current absolute checkout,
    branch, starting SHA, owned files, and acceptance checks. If the caller requires
@@ -50,7 +57,8 @@ helper. Its status is evidence for the agent, not an unconditional approval.
    integrated temporary repair checkouts using the caller's procedure. Use
    Conventional Comments and keep a short ledger of dispositions.
 3. Fix the smallest relevant issue, commit, rerun affected checks, and invoke
-   `review-loop` on the repair from the pre-repair commit to its candidate. Only
+   `review-loop` on the repair from the pre-repair commit to its candidate, with
+   actual worker family, current capabilities, and retained frontend preference. Only
    push after PASS. Ensure the checkout belongs to this PR and contains its latest
    remote head; preserve concurrent edits and pushed history. If a base update
    requires a prohibited history change or a product decision, report the blocker.
@@ -100,7 +108,8 @@ merged phase. PR-event runs on the same SHA do not count. External CI must be
 verified directly against that commit; deployment health is outside v1.
 
 If a real failure comes from this change, return it to the worker for repair
-from the latest fetched base. Create a new run-owned fix branch/worktree through
+from the latest fetched base, preserving model-routing context and the frontend
+preference. Create a new run-owned fix branch/worktree through
 the host's supported mechanism, preserve the original checkout, validate the
 repair with checks and `review-loop`, and open one repair PR linked to the
 original. Check for an existing repair PR before creating another on resume.

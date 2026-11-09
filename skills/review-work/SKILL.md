@@ -14,8 +14,9 @@ scope, picks the model for every helper agent, saves all records, and checks
 all results. Helper agents do the job they are given and report back.
 
 This skill works next to `plan-work` and `execute-work`. It requires
-`review-loop` for shared review guidance and `watch-pr` for PR validation.
-Resolve both from the installed skill catalog before starting; report a missing
+`model-routing` for route selection, `review-loop` for shared review guidance,
+and `watch-pr` for PR validation.
+Resolve them from the installed skill catalog before starting; report a missing
 dependency rather than silently omitting it. It does not invoke execute-work.
 
 ## Words used here
@@ -77,7 +78,8 @@ dependency rather than silently omitting it. It does not invoke execute-work.
    - **`develop`:** review the whole current code. Do not invent a start date
      or start commit.
 5. Ask **"Inline or subagent fanout?"** unless the user already said.
-   - **Inline:** the main agent reviews by itself. Fixes still use helpers.
+   - **Inline:** one review lane. Main reviews only if it matches the validated
+     route; otherwise use one routed reviewer helper. Fixes still use helpers.
    - **Fanout:** helpers review in parallel. Ask for the most helpers at once,
      and suggest a number based on the useful independent areas. Offer
      **Auto**: as many useful helpers as capacity allows. If capacity is
@@ -106,60 +108,27 @@ dependency rather than silently omitting it. It does not invoke execute-work.
 
 ## Step 3: Pick models, then review
 
-Read [routing.md](references/routing.md) and the installed review-loop skill's
-`references/review-code.md` first. Give the shared reference to reviewer helpers.
-Use its inspection and Conventional Comments guidance without invoking the
-noninteractive fix loop during initial interactive review. Keep this skill's
-routing, coverage records, user decisions, and page format.
+Read model-routing's SKILL.md and reference, [routing.md](references/routing.md),
+and review-loop's `references/review-code.md`. Give reviewer helpers the shared
+review-code reference. Initial interactive review does not invoke the repair loop.
 
-- The main agent picks the exact model **and** effort for every review and fix
-  task. It checks that the host offers them, then records the choice before it
-  starts the task. Helpers never call Jev or choose routes (model, effort, or
-  options). They never start their own helpers unless main gives them an exact,
-  fixed assignment to do so.
-- Stay in the chat's model family: GPT models in a GPT chat; Claude Opus,
-  Sonnet, or Haiku in a Claude chat.
-- **Always the newest version.** Models are picked by tier name (Astra, Sol,
-  Terra, Opus, Sonnet, Haiku). For each tier, the runtime keeps only the
-  newest version in the host's model list and rejects older ones. Never
-  pick a version from memory. Trust the host's model list over
-  guesses. Never invent a model ID or switch providers silently. If the family
-  is unknown or a needed model is missing, ask.
-- Jev can pick the model first, then an effort that model supports. It needs a
-  key. Find it with the runtime's credential discovery, never by opening the
-  file yourself. Discovery checks `<home>/.config/jev/credentials.env` first
-  (`TYPESAFE_API_KEY` is the recommended name). If no usable home key exists, check
-  the project's real env-loading order and its configured adapters, then pass
-  those env file paths. Never print, save, or `source` key files or key values.
-  The full lookup order is in routing.md.
-- A configured Jev MCP adapter can make the same two choices. Read its real
-  tool schema first; do not assume a `jev_route` tool exists. Without an
-  adapter, use the runtime's built-in direct transport.
-- **Effort caps, for every model:** reviews and planning go up to
-  extra-high, never max or ultra. Fixes go up to High. The runtime rejects
-  any route above the cap, from Jev or from main.
-- If Jev is missing or gives an unusable answer, the main agent decides with
-  the same rules. There is no fixed fallback table.
-  - Read-only listing work: Low is fine.
-  - Algorithms or hard reasoning: High or extra-high.
-  - Not sure: High.
-  - **Security review and planning** (login, permissions, secrets, crypto,
-    tenant isolation, trust boundaries): **newest GPT Astra or newest Claude
-    Opus, at extra-high**. If that model has no extra-high, use the same
-    model at its highest level below the cap (at least High). Do not switch
-    to an older version. If a helper finds new security scope, it stops that part
-    and reports to main.
-    Planned implementation uses the fix routes below, including security fixes.
-  - **Inline review when part of it needs a higher route:** do not ask the
-    user to change this chat's model or effort. This chat cannot confirm or
-    set its own effort. Give that part (for example, the security checks) to
-    one review helper, and set the helper's exact model and effort when you
-    start it (in Claude Code, the Agent tool's `model` and `effort`; in T3,
-    `delegate_task` options). Record the route first. The helper returns
-    findings; the main agent saves them. Ask the user only if the host cannot
-    start a helper at the required model and effort: then explain the gap and
-    offer to keep this chat's model. Record that choice once for this review
-    and do not ask again. This never lowers the rule for fanout helpers.
+Main routes each reviewer and fixer through model-routing and records the exact
+model, provider/family, effort, source, and capability evidence before dispatch.
+Use host metadata, never remembered version IDs. Helpers never call Jev or route.
+
+For reviews, pass `kind: "review"` and the actual implementing family when known.
+Unknown provenance uses the caller-family assumption. Prefer a dispatchable,
+risk-eligible opposite-family reviewer; otherwise use the same family and record
+why. Partition known mixed-family work. Jev or validated main judgment selects
+model and effort within that family. Preserve model-routing's security floors
+and effort caps. Revalidate before dispatch; reconcile uncertain launches before
+replacement. Blocking findings are not provider unavailability.
+
+Inline review is allowed only when this chat actually satisfies the validated
+route. Otherwise delegate that review at its exact route; do not ask the user to
+change this chat's settings or claim it switched. Missing capability/eligible
+routes are blockers. Keep this skill's coverage, page, and user-approval rules.
+
 - Split the review by behavior and file ownership, following the shared
   review-code guidance for tracing effects and validating findings.
 - Record coverage: what you **checked**, **skipped**, and could **not finish**,
@@ -279,15 +248,11 @@ Read [orchestration.md](references/orchestration.md) and
    Main fills small gaps. If behavior or security decisions remain unresolved,
    use Astra or Opus for that planning work, then hand the concrete plan to a
    separately routed fixer. Do not carry the reviewer's model into the fix.
-   - GPT fixes use the **newest Sol or newest Terra**.
-   - Claude fixes use the **newest Sonnet or newest Haiku**.
-   - Pick the least costly model adequate for the implementation: Haiku for
-     mechanical, fully specified edits; Sonnet, Sol, or Terra for work needing
-     more code judgment. Pick the lowest effort that fits the plan: Low for
-     mechanical edits, Medium for typical bounded fixes, High for fixes that
-     need real code judgment. High is the cap. Security, algorithm, and
-     explicitly uncertain fixes use High. Stay within the chat's family and use exact
-     available host IDs. A missing implementation model is a blocker.
+   - Route the planned implementation afresh through model-routing; do not
+     inherit the reviewer's family or effort. Ordinary fixes use implementation
+     candidates in the caller's execution family, capped at High. Preserve a
+     retained execute-work frontend preference when present; standalone fixes
+     do not acquire the frontend exception automatically. Record worker family.
    - Give the runtime `kind: "fix"` (or `"implementation"`) and a `plan` with
      `summary`, nonempty `paths`, and nonempty `acceptanceCriteria`. Include
      concrete changes and regression checks. A Small/Medium/Large label alone
@@ -350,7 +315,8 @@ Read [orchestration.md](references/orchestration.md) and
 
 Automatically invoke `watch-pr` in this main chat after creating/updating the
 PR unless the user opts out. Pass the plan, approved fixes and Don't fix notes,
-worker identities, routing constraints, actual checks, PR/head SHA, and complete
+worker identities/families, retained frontend preference, routing constraints,
+host capabilities, actual checks, PR/head SHA, and complete
 run-owned inventory. PR validation repairs must preserve the approved behavior;
 new scope or reversing a user decision requires clarification. Do not create a
 second PR for ordinary open-PR repairs.
@@ -407,7 +373,7 @@ Use this for chat updates, task briefs, PR text, and reports. Findings follow
 ## Updating and sharing this skill
 
 Use [installation.md](references/installation.md). Keep the same versions of
-`plan-work`, `execute-work`, `review-work`, `review-loop`, and `watch-pr` on each chosen machine. Each skill
+`plan-work`, `execute-work`, `review-work`, `review-loop`, `watch-pr`, and `model-routing` on each chosen machine. Each skill
 lives in `.agents/skills/<name>`. The installer never touches `.claude`; the
 user links `.claude/skills` to `.agents/skills` once.
 Keep conflicting installs (back them up, never delete them), and preserve unrelated skills and shared links. Never bundle review records or keys.

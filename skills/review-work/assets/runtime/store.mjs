@@ -5,8 +5,9 @@ import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
+import { ROUTING_SOURCE } from './routing.mjs';
 
-export const VERSION = '1.3.1';
+export const VERSION = '1.4.0';
 const SCHEMA_VERSION = 1;
 const DECISIONS = new Set(['fix', 'dont_fix', 'clarify']);
 const LABELS = new Set(['issue', 'question', 'suggestion', 'nitpick', 'praise', 'todo', 'thought', 'chore', 'note', 'typo', 'polish', 'quibble']);
@@ -66,7 +67,9 @@ function runtimeFiles(root, prefix = '') {
 }
 export function bootstrapRuntime(stateRoot, source = path.dirname(fileURLToPath(import.meta.url))) {
   const files = runtimeFiles(source);
-  const contents = files.map(name => ({ name, content: fs.readFileSync(path.join(source, name)) }));
+  // The installed router is a sibling-skill adapter. Freeze the canonical,
+  // self-contained module instead, so cached reviews need no installed skills.
+  const contents = files.map(name => ({ name, content: fs.readFileSync(name === 'routing.mjs' ? ROUTING_SOURCE : path.join(source, name)) }));
   const digest = hash(Buffer.concat(contents.flatMap(x => [Buffer.from(`${x.name}\0`), x.content])));
   const destination = path.join(stateRoot, '_runtime', `${VERSION}-${digest.slice(0, 16)}`);
   fs.mkdirSync(destination, { recursive: true, mode: 0o700 });

@@ -5,6 +5,9 @@ description: Review a small committed change with one independent reviewer, retu
 
 # Review Loop
 
+Requires `model-routing`; resolve and read it from the installed skill catalog
+before dispatch. Report a missing dependency rather than skipping routing.
+
 Run this workflow in the calling coordinator. Reuse the original implementation
 worker and its context; do not create another supervisor. For standalone use,
 the caller handles fixes. This skill authorizes scoped local fixes and commits,
@@ -16,7 +19,10 @@ actions and any existing scope, approval, or model restrictions.
 Read [review-code.md](references/review-code.md) and give its absolute path to
 each reviewer. Require the checkout path, intent and non-goals, acceptance
 criteria, repository guidance, exact base/candidate SHAs, worker identity if
-available, required check results, and previous findings/responses on resume.
+available, required check results, actual implementation family (if known),
+host dispatch capabilities, retained
+frontend preference from execute-work (if any), and previous findings/responses
+on resume.
 Keep a small ledger in the caller's task record: round, SHAs, findings, worker
 dispositions and evidence. No service or database is needed.
 
@@ -28,10 +34,18 @@ report missing scope rather than guessing. Do not include unrelated edits.
 ## 2. Review and respond
 
 Allow **three rounds total**, including the initial review. One fresh read-only
-reviewer per round; no reviewer fanout or nested helpers. Default to the caller's
-provider/model settings unless the user or repository specifies otherwise.
-Respect host delegation rules and report unavailable routes; GPT Sol is not
-required. In T3, every round is a new review delegate, not a thread send.
+reviewer per round; no reviewer fanout or nested helpers. Route every round through
+model-routing as `kind: "review"`. Prefer the opposite implementation family when
+host capabilities and risk/effort eligibility support it; otherwise use the same
+family with a recorded reason. Unknown author family uses the caller's family
+as the author assumption. Jev or validated main-agent fallback selects the review
+model and effort. The frontend worker preference does not pin the reviewer.
+
+Revalidate immediately before dispatch. A confirmed pre-launch availability
+rejection permits rerouting with updated capabilities. An uncertain launch must
+be reconciled or confirmed stopped before a replacement starts. Findings never
+trigger provider fallback. These events never reset the three-round budget.
+In T3, every round is a new review delegate, not a thread send.
 
 Give the reviewer the full task brief, SHAs, check evidence, shared reference,
 and ledger. Round 1 reviews the scoped diff and affected contracts. Later rounds
@@ -42,8 +56,10 @@ is not approval and consumes that attempted round.
 Send all findings to the original worker. It fixes agreed issues with the
 smallest change, or supplies evidence for disagreement. It may decline a
 non-blocking suggestion or nitpick with one short reason. Do not broaden the
-task or reverse a user's previously declined finding. Commit repairs, rerun
-affected checks, stop writes, and request the next review.
+task or reverse a user's previously declined finding. Use model-routing for
+replacement workers or changed implementation assignments,
+preserving execute-work's frontend choice. Commit repairs, rerun affected checks,
+record the actual worker family, stop writes, and request the next review.
 
 A disputed blocker goes back to the reviewer with the worker's reasoning;
 the worker cannot waive it alone. Keep stable finding IDs and mark each old

@@ -7,11 +7,12 @@ runs user notes as commands, changes Git, or opens a PR. Only main picks routes
 (provider, model, effort, and options) and decides. Task records are a log; they
 never start work.
 
-1. Before dispatch, reuse or complete the finding's concrete plan and select a
-   fresh route for this phase, as in [routing.md](routing.md#route-by-task-phase).
-   Use Astra/Opus for unresolved planning; planned fix execution uses Sol/Terra
-   or Sonnet/Haiku in the selected family. Check the exact route against current host capabilities.
-   Record it.
+1. Before dispatch, complete the concrete plan and select a fresh route through
+   the installed model-routing skill, as in [routing.md](routing.md). Pass actual
+   worker provenance, host dispatch capabilities, and any retained execute-work
+   frontend preference. Reviews prefer a capable opposite family, falling back
+   to the author family; planned fixes route independently. Record and revalidate
+   the exact model/provider/effort before dispatch. Helpers never choose routes.
 2. Reserve a stable task ID with `task-reserve`. Pass the returned
    `clientRequestId` unchanged to a host with idempotent delegation (one request
    ID starts at most one task).
@@ -109,7 +110,8 @@ Each brief contains:
 - owned files and dependency contracts
 - coordinator's current SHA
 - concrete plan: change summary, owned paths, and acceptance checks
-- exact model and effort chosen for this phase
+- exact model/provider/family and effort chosen for this phase
+- host capability evidence, actual author family, and retained frontend preference
 - focused check commands (only the tests for the owned files, never the full
   suite) and product acceptance criteria
 - output fields: commit, checks, concerns, artifacts

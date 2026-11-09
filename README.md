@@ -1,8 +1,8 @@
 # work-skills
 
-Five agent skills for planning, implementation, review, and PR validation:
+Six agent skills for planning, implementation, review, and PR validation:
 
-**[plan-work](#plan-work)** &nbsp;·&nbsp; **[execute-work](#execute-work)** &nbsp;·&nbsp; **[review-work](#review-work)** &nbsp;·&nbsp; **[review-loop](#review-loop)** &nbsp;·&nbsp; **[watch-pr](#watch-pr)**
+**[plan-work](#plan-work)** &nbsp;·&nbsp; **[execute-work](#execute-work)** &nbsp;·&nbsp; **[review-work](#review-work)** &nbsp;·&nbsp; **[review-loop](#review-loop)** &nbsp;·&nbsp; **[watch-pr](#watch-pr)** &nbsp;·&nbsp; **[model-routing](#model-routing)**
 
 | Skill | What it does | Changes code? |
 | --- | --- | --- |
@@ -11,6 +11,7 @@ Five agent skills for planning, implementation, review, and PR validation:
 | [review-work](skills/review-work/SKILL.md) | Reviews a branch or codebase, shows the findings on a local web page, and fixes only what you approve. | Only approved fixes |
 | [review-loop](skills/review-loop/SKILL.md) | Runs a small independent review and returns findings to the worker for up to three rounds. | Scoped local fixes |
 | [watch-pr](skills/watch-pr/SKILL.md) | Validates PRs, repairs CI/review failures, and checks merge CI before cleanup. | Scoped repairs and PR replies |
+| [model-routing](skills/model-routing/SKILL.md) | Shares Jev/fallback model and effort selection, frontend preferences, and capability-based review routing. | No |
 
 The usual flow is **plan → execute → review-loop → PR → watch-pr**.
 Interactive review-work remains available for user-directed reviews.
@@ -20,10 +21,11 @@ Interactive review-work remains available for user-directed reviews.
 Install their dependencies too; selective skill installation does not resolve
 these dependencies automatically:
 
-- `execute-work` requires `review-loop` and `watch-pr`.
-- `review-work` requires `review-loop` (shared guidance) and `watch-pr`.
-- `watch-pr` requires `review-loop`.
-- `plan-work` and `review-loop` have no skill dependencies.
+- `execute-work` requires `model-routing`, `review-loop`, and `watch-pr`.
+- `review-work` requires `model-routing`, `review-loop` (shared guidance), and `watch-pr`.
+- `watch-pr` requires `model-routing` and `review-loop`.
+- `review-loop` requires `model-routing`.
+- `plan-work` and `model-routing` have no skill dependencies.
 
 A missing dependency is reported before work starts; review is never silently
 skipped. Skills resolve dependencies through the host's installed skill catalog.
@@ -32,7 +34,7 @@ skipped. Skills resolve dependencies through the host's installed skill catalog.
 
 You need Node.js 22.20 or later for the installer.
 
-All five skills, available in every project:
+All six skills, available in every project:
 
 ```bash
 npx skills add steve-swanson/work-skills -g
@@ -41,7 +43,7 @@ npx skills add steve-swanson/work-skills -g
 Interactive review and its dependencies:
 
 ```bash
-npx skills add steve-swanson/work-skills --skill review-work review-loop watch-pr -g
+npx skills add steve-swanson/work-skills --skill review-work review-loop watch-pr model-routing -g
 ```
 
 The installer asks which coding agents to install to (for example Claude Code
@@ -59,7 +61,7 @@ npx skills update
 - A coding agent that can start subagents, such as Claude Code, Codex, or
   T3 Code.
 - Git. execute-work and review-work make branches and worktrees.
-- Node.js 24 or later for review-work's page/records and watch-pr's portable helper.
+- Node.js 24 or later for shared routing, review-work's page/records, and watch-pr's helper.
 - Authenticated GitHub CLI (`gh`) for PR operations and the GitHub.com watcher.
 - Terminal monitoring needs a host that supports long-running execution or event
   notifications. A helper cannot itself resume an agent; unsupported hosts report
@@ -67,64 +69,29 @@ npx skills update
 
 ## Optional: model routing with Jev
 
-review-work starts many helper agents: reviewers, fixers, and checkers. Each
-one needs a model and a reasoning effort. Too weak, and it misses problems.
-Too strong, and it costs more and runs slower than it needs to.
+[model-routing](skills/model-routing/SKILL.md) supplies one routing implementation
+for workers, reviews, and PR repairs. Jev chooses a model and then its supported
+reasoning effort; when unavailable, the coordinator makes and validates that
+choice against the same candidates and risk rules. Only the coordinator routes.
 
-**What Jev does.** Jev is a judgment model from TypeSafe. For each task,
-review-work asks Jev two short questions: which of your agent's models fits
-this task, then which effort level for that model. Jev picks from the models
-your agent actually offers. It never invents a model.
+- **Frontend work in execute-work:** ask once per run whether to use latest
+  Astra (GPT) or Fable (Claude). Declining selects latest Sol or Opus. The model
+  tier stays fixed while Jev/fallback selects effort up to extra-high. The choice
+  persists through retries, resumes, and PR repairs.
+- **Other implementation:** latest Sol/Terra or Sonnet/Haiku, capped at High.
+- **Reviews:** prefer a capable opposite-family reviewer when the harness can
+  actually dispatch it; otherwise use the implementing family and record why.
+  Catalog presence alone does not prove support. This works through each host's
+  capabilities rather than a T3-only rule.
+- **Security reviews/planning:** Astra or Opus with the existing reasoning floor.
+  Reviews stop at extra-high; Max and Ultra are excluded throughout.
 
-**Without Jev**, the main agent makes the same choices by itself, using the
-rules in [routing.md](skills/review-work/references/routing.md). Everything
-still works. Some rules always apply, with or without Jev:
-
-- Effort caps for every model: reviews go up to extra-high; fixes go up
-  to High. Max and ultra are never used.
-- Models are picked by tier name. Only the newest version of each tier
-  your agent offers is used, so new releases work with no edits.
-- Security review and planning use the newest Astra or Opus at extra-high.
-  If that model has no extra-high, it uses its highest level below that.
-- Once planned, fixes use the newest Sol/Terra or Sonnet/Haiku, chosen for
-  implementation difficulty. Effort can be Low, Medium, or High. Planned
-  security fixes use High.
-- If Jev is down, slow, or unsure, the main agent decides. It never quietly
-  falls back to a weaker model.
-
-**What is sent.** A short task summary written by the main agent, its risk
-signals, and the list of models your agent offers. review-work does not
-upload your repository. The request goes only to
-`https://api.typesafe.ai/v1/systemone`.
-
-**Where the key goes.** Put your key in one file in your home folder:
-
-| System | File |
-| --- | --- |
-| macOS / Linux | `~/.config/jev/credentials.env` |
-| Windows | `%USERPROFILE%\.config\jev\credentials.env` |
-
-```dotenv
-TYPESAFE_API_KEY=your-key-here
-```
-
-Keep the file private (`chmod 700 ~/.config/jev` and
-`chmod 600 ~/.config/jev/credentials.env` on macOS and Linux).
-
-**Where review-work looks, in order:**
-
-1. That home file.
-2. Environment variables in the agent's shell.
-3. The project's own env files (such as `.env.local`), only the ones the
-   project really loads, in the project's own order.
-
-It accepts these names, first match wins: `TYPESAFE_API_KEY`, `JEV_API_KEY`,
-`TYPESAFE_KEY`, `JEV_KEY`, `TYPESAFE_API`, `JEV_API`. `TYPESAFE_API_KEY` is
-the recommended one.
-
-The agent never opens, prints, or copies the key. Only review-work's runtime
-reads it, and it never writes the key to logs, review records, or worktrees.
-If your agent has a Jev MCP server set up, review-work can use that instead.
+Jev receives sanitized task evidence and candidate metadata, not a repository
+upload. Direct requests go to `https://api.typesafe.ai/v1/systemone`. The optional
+shared key is `TYPESAFE_API_KEY` in `~/.config/jev/credentials.env` (Windows:
+`%USERPROFILE%\.config\jev\credentials.env`). Agents never print or copy it.
+See [routing and credentials](skills/model-routing/references/routing.md) for
+lookup order, adapters, exact input/output, and fallback behavior.
 
 ## The skills
 
@@ -173,7 +140,8 @@ Use it when the work is defined and approved.
 1. Makes one coordinating branch from `develop`, with a clear name.
 2. Splits the work by deliverable and file ownership, and gives each part to a
    subagent in its own Git worktree.
-3. Gives each finished part a small, independent PASS/FAIL review with
+3. Routes each worker through model-routing, retaining the frontend choice.
+   Gives each finished part a small, independent PASS/FAIL review with
    Conventional Comments. The worker processes the findings; blocking issues
    go through fixes and re-review, while optional feedback stays discretionary.
 4. Reviews each part against the current coordinating tip, then merges the
@@ -222,8 +190,9 @@ Use it to review a feature branch (its diff) or a whole codebase.
 - The page runs on `127.0.0.1` only. It never opens a public port.
 - Review records stay on your machine in `~/.agents/state/review-work/`. They
   are never added to your repo.
-- Security review and planning use Astra/Opus. Planned fixes use Sol/Terra
-  or Sonnet/Haiku, with a fresh model choice for implementation.
+- Shared routing chooses reviewers from a capable opposite family when available,
+  otherwise the author family. Planned fixes route independently; security
+  reasoning floors remain in force.
 - **Model routing with Jev is optional.** See
   [Optional: model routing with Jev](#optional-model-routing-with-jev).
 - **Page on another machine (T3 Code only).** In
@@ -246,7 +215,8 @@ Use it to review a feature branch (its diff) or a whole codebase.
 - Uses Conventional Comments; workers can decline optional feedback with reasons.
 - Blocking findings need a fix or an evidence-backed objection accepted on recheck.
 - PASS applies to the exact reviewed base/candidate commits. Exhaustion is FAIL.
-- Uses the caller's model settings by default, with no required model vendor.
+- Routes every round through model-routing: capable opposite family preferred,
+  otherwise same-family review, with task/risk-based model and effort selection.
 - Reuses the existing worker; standalone callers handle their own fixes.
 
 > Use review-loop to review this committed change against its acceptance criteria.
@@ -281,6 +251,24 @@ state, and host limitations. The observation/repair split was informed by
 
 </details>
 
+<a id="model-routing"></a>
+<details>
+<summary><strong>model-routing</strong> — one shared routing policy</summary>
+
+Uses the host's actual model/provider capabilities, newest eligible versions,
+Jev or explicit main-agent fallback, and validated effort limits. It does not
+start agents or own task/PR workflows. A dependency-free JSON CLI also works
+without review-work's page or SQLite runtime.
+
+> Use model-routing to select and validate a model and effort for this task.
+
+Existing review-work route commands remain compatible. New review snapshots
+freeze the shared router in their runtime digest; existing pinned runs remain
+unchanged. To apply current policy while resuming a legacy review, use the
+standalone router and record the result without rewriting its pinned files.
+
+</details>
+
 ## Repository layout
 
 ```text
@@ -290,12 +278,13 @@ skills/
   review-work/    SKILL.md, references/, assets/runtime/, scripts/, tests/
   review-loop/    SKILL.md, references/, evals/
   watch-pr/       SKILL.md, references/, scripts/, tests/
+  model-routing/  SKILL.md, references/, lib/, scripts/, tests/, evals/
 ```
 
 Tests use Node's built-in test runner:
 
 ```bash
-node --test skills/review-work/tests/*.test.mjs skills/watch-pr/tests/*.test.mjs
+node --test skills/model-routing/tests/*.test.mjs skills/review-work/tests/*.test.mjs skills/watch-pr/tests/*.test.mjs
 ```
 
 ## License

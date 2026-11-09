@@ -1,4 +1,4 @@
 interface:
   display_name: "Execute Work"
-  short_description: "Execute plans with reviewed tasks and PR validation"
+  short_description: "Route workers, review tasks, and validate one PR"
   default_prompt: "Use $execute-work to execute the agreed work or implementation plan."

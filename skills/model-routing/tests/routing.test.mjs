@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import {
   KEY_ALIASES, resolveCredentials, discoverCredentials, modelFamily,
   assessRisk, chooseConcurrency, validateRoute, routeTask,
-} from '../assets/runtime/routing.mjs';
+} from '../lib/routing.mjs';
 
 const catalog = [
   { id: 'gpt-6-mini', family: 'gpt', provider: 'openai', efforts: ['low', 'medium', 'high'], effortOptionId: 'reasoning_effort' },

@@ -23,7 +23,7 @@ existing prohibitions in force.
 
 ## 1. Prepare the coordinating branch
 
-Requires `review-loop` and `watch-pr`; resolve both SKILL.md files from the
+Requires `model-routing`, `review-loop`, and `watch-pr`; resolve their SKILL.md files from the
 host's installed skill catalog before starting work. Report a missing dependency
 instead of duplicating instructions or skipping review.
 
@@ -59,6 +59,21 @@ starting over.
 
 ## 2. Split and delegate
 
+Read model-routing before delegation. Obtain current host models, exact effort
+options, and normalized dispatch capabilities. Route every implementation task
+with a concrete plan and record its model/provider/family, effort, and decision
+source. Use Jev or validated main-agent fallback; never inherit an unchecked
+worker model. Revalidate capabilities and the route immediately before dispatch.
+
+Classify frontend tasks explicitly. Before the first frontend worker starts,
+ask once whether to use latest Astra (GPT) or latest Fable (Claude). Yes selects
+that tier; no selects latest Sol (GPT) or latest Opus (Claude). Let Jev/fallback
+choose effort per task up to xhigh. Retain `{family, choice}` in the run ledger
+for retries, resumed work, and watch-pr repairs. Reuse existing explicit consent;
+ask again only when the user changes it or execution family changes. Do not
+interpret silence as approval. Independent non-frontend tasks may continue while
+waiting. Standalone non-frontend implementation retains the High cap.
+
 Split by deliverable and file ownership. Run independent tasks concurrently
 within available agent capacity; sequence dependencies and overlapping edits.
 Create each task branch/worktree from the coordinating branch's current tip.
@@ -66,7 +81,8 @@ After a dependency integrates, start dependent tasks from the updated tip.
 
 Spawn actual subagents with the task requirements, relevant plan sections,
 absolute worktree path, branch, owned files, dependency contracts, acceptance
-criteria, and required checks. Each agent works only in its assigned checkout,
+criteria, required focused checks, and its exact validated model/effort route.
+Each agent works only in its assigned checkout,
 commits its changes, and reports its commit, checks, remaining concerns, and
 any additional branches/worktrees it created. Register those in the run-owned
 inventory immediately. The coordinator alone integrates and removes worktrees.
@@ -81,6 +97,7 @@ Require a clean task checkout, committed work, and relevant passing checks.
 After aligning the task with the current coordinating tip in step 4, invoke
 `review-loop` in this coordinator with the task brief, worker identity, checkout,
 acceptance criteria, repository guidance, exact base/candidate SHAs, check results,
+the actual implementing family, host capabilities, retained frontend preference,
 and any previous findings. It returns feedback to that worker and owns the
 three-round review budget. No extra supervisor or interactive review page.
 
@@ -208,7 +225,8 @@ linking tool as the next call after creation/push. Leave the PR open for review.
 
 Invoke `watch-pr` automatically after creating/updating the PR unless the user
 opts out. Pass the plan, worker identities, review dispositions, checks, published
-SHA, and run-owned inventory. It handles valid CI/review failures through the
+SHA, retained frontend preference, worker families/routes, capability evidence,
+and run-owned inventory. It handles valid CI/review failures through the
 workers and review-loop, then revalidates the updated PR. Report completion only
 when ready or explicitly blocked; while waiting, follow the host watcher handoff.
 It never merges the PR. Retain the coordinator for explicit post-merge watch-pr

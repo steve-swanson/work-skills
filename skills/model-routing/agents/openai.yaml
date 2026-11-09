@@ -1,0 +1,4 @@
+interface:
+  display_name: "Model Routing"
+  short_description: "Shared Jev routing with capability-aware review selection"
+  default_prompt: "Use $model-routing to choose and validate this task's model and effort against current host capabilities."

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createReview, createMirror, listReviews, readManifest, ReviewStore, fail, frameRelay, unframeRelay, RELAY_MAX_CHARS } from './store.mjs';
 import { startServer, readThreadTexts } from './server.mjs';
-import { routeTask } from './routing.mjs';
+import { routeTask, sanitizeRoute } from './routing.mjs';
 
 const THIS_FILE = fileURLToPath(import.meta.url);
 const MAX_INPUT = 1024 * 1024;
@@ -252,23 +252,6 @@ async function serve(directory) {
   const result = serviceResult('serving', directory, info);
   if (process.send) process.send({ type: 'ready', reviewId: info.reviewId, pid: process.pid, nonce: info.nonce });
   return result;
-}
-
-function sanitizeRoute(result, input) {
-  const values = new Set();
-  const sources = [input.env, input.credentialOptions?.env, ...((input.sources ?? []).map?.(source => source.values) ?? [])];
-  for (const source of sources) if (source && typeof source === 'object') for (const value of Object.values(source)) if (typeof value === 'string' && value) values.add(value);
-  for (const [key, value] of Object.entries(process.env)) if (/(?:key|token|secret|password|credential|jev_api|typesafe_api)/i.test(key) && value) values.add(value);
-  const secrets = [...values].sort((a, b) => b.length - a.length);
-  const walk = value => {
-    if (typeof value === 'string') return secrets.reduce((text, secret) => text.split(secret).join('[REDACTED]'), value);
-    if (Array.isArray(value)) return value.map(walk);
-    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value)
-      .filter(([key]) => !/^(?:authorization|api[_-]?key|token|password|secret|credentials|credentialOptions|env|envFiles|sources)$/i.test(key))
-      .map(([key, child]) => [walk(key), walk(child)]));
-    return value;
-  };
-  return walk(result);
 }
 
 export async function runCli(argv) {

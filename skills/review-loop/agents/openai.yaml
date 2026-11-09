@@ -1,4 +1,4 @@
 interface:
   display_name: "Review Loop"
-  short_description: "Small code reviews with worker feedback and rechecks"
+  short_description: "Capability-aware reviews with worker feedback and rechecks"
   default_prompt: "Use $review-loop to review this committed change and work through findings for up to three rounds."

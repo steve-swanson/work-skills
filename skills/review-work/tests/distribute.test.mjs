@@ -11,25 +11,27 @@ import {
   buildBundle, writeBundle, readBundle, installBundle, verifyBundle,
 } from '../scripts/distribute.mjs';
 
-const skills = ['plan-work', 'execute-work', 'review-work', 'review-loop', 'watch-pr'];
+const skills = ['plan-work', 'execute-work', 'review-work', 'review-loop', 'watch-pr', 'model-routing'];
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const run = promisify(execFile);
 const helper = fileURLToPath(new URL('../scripts/distribute.mjs', import.meta.url));
 
-test('real five-skill bundle includes dependency references and watcher helper', async () => {
+test('real six-skill bundle includes dependency references and watcher helper', async () => {
   const skillsRoot = fileURLToPath(new URL('../../', import.meta.url));
   const bundle = await buildBundle({ skillsRoot });
-  assert.equal(bundle.version, 2);
+  assert.equal(bundle.version, 3);
   assert.deepEqual(bundle.manifest.skills, skills);
-  for (const relative of ['review-loop/references/review-code.md', 'watch-pr/scripts/watch.mjs']) {
+  for (const relative of ['review-loop/references/review-code.md', 'watch-pr/scripts/watch.mjs', 'model-routing/lib/routing.mjs', 'model-routing/scripts/route.mjs']) {
     assert.equal(Buffer.from(bundle.contents[relative], 'base64').toString('utf8'),
       await readFile(path.join(skillsRoot, relative), 'utf8'));
   }
-  const old = structuredClone(bundle); old.version = 1;
   const root = await mkdtemp(path.join(tmpdir(), 'old-bundle-test-'));
   try {
-    await assert.rejects(installBundle({ bundle: old, home: root }), /rebuild.*five-skill/);
-    assert.deepEqual(await readdir(root), []);
+    for (const version of [1, 2]) {
+      const old = structuredClone(bundle); old.version = version;
+      await assert.rejects(installBundle({ bundle: old, home: root }), /rebuild.*six-skill/);
+      assert.deepEqual(await readdir(root), []);
+    }
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
