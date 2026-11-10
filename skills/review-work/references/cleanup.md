@@ -104,14 +104,17 @@ or hidden page-service feature. Closing the triage phase must not erase this
 pending note. Refresh the published head SHA and evidence after every later PR
 push. Never treat a later, unrecorded head as cleared for cleanup.
 
-Check the head repository's effective GitHub auto-delete setting and branch
-rules. GitHub's **Automatically delete head branches** can delete the remote
-head after merge; it never deletes local refs or worktrees. Report a disabled
-setting, fork permission limit, or protection rule instead of promising
-deletion. Auto-delete and local cleanup stay separate; neither gives authority
-over unrelated branches or repo policy. Do not change repo-wide settings or
-delete unrelated remote refs unless asked.
-Reference: [GitHub automatic branch deletion](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-the-automatic-deletion-of-branches).
+Check the provider's effective source-branch deletion policy when visible. It
+may delete a remote source branch after merge, never the local ref or worktree.
+Report disabled/unknown settings, permission limits or protection rules; never
+change repo policy or promise remote deletion. Remote deletion and local cleanup
+stay separate. Use watch-pr's provider adapter for authoritative completed merge
+and target-ref CI evidence before cleanup. Keep existing review manifests and
+repository/database identities unchanged.
+
+After this run automatically merges an eligible working-target PR, skip waiting
+for a merge event. Enter watch-pr's merge-commit validation immediately; pending
+CI still follows its supported wakeup/manual-resume rules before cleanup.
 
 Set up only a supported, lasting notice that really wakes on merge or close. In
 T3, check current watch behavior: the documented checks, reviews, and conflict
@@ -125,7 +128,7 @@ compatible subscription. Otherwise record `deferred`, keep the coordinator, and
 tell the user to say **"Clean up the merged review"** in that original chat.
 Never claim automatic monitoring or leave an agent waiting silently.
 
-### On a merge wake-up or manual resume
+### After an automatic merge, merge wake-up, or manual resume
 
 1. Load the saved review and cleanup note with the owner CLI. Reconcile any
    earlier cleanup attempt before retrying. Read fresh, authoritative PR state
@@ -133,7 +136,9 @@ Never claim automatic monitoring or leave an agent waiting silently.
    merge commit, intended base, and the exact head commit merged. A PR closed
    without merging, a missing remote branch, passing checks, or an auto-merge
    request is not proof. If the head repository or branch differs from the
-   record, resolve it; do not guess. Never merge, enable auto-merge, or deploy.
+   record, resolve it; do not guess. Cleanup itself never authorizes a merge;
+   use [merge-policy.md](merge-policy.md) for the working-target exception.
+   Never enable provider auto-merge or deploy.
 2. On the review host, verify the clone, shared Git folder, and run ownership.
    Fetch the recorded target from its real remote and verify it contains the
    authoritative merge commit. Require that the exact local coordinator ref
@@ -149,7 +154,7 @@ Never claim automatic monitoring or leave an agent waiting silently.
    Verify the path, Git registration, and managed attachment are gone. Reread
    local refs and the worktree list before deleting the branch.
 4. For a normal merge whose target contains the original head, run
-   `git branch -d <exact-branch>` and inspect the result. After a GitHub squash
+   `git branch -d <exact-branch>` and inspect the result. After a provider squash
    or rebase merge, the target can rightly lack the original head, so
    `branch -d` may refuse despite a confirmed merge. Only after all checks above
    and fresh, immutable merged-head evidence, compare-and-delete this run-owned

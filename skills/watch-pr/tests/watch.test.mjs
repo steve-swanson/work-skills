@@ -18,6 +18,10 @@ function apiFixture(overrides = {}) {
     calls.push(args);
     if (args[0] === 'pr') return { ...pr, ...(calls.filter(c => c[0] === 'pr').length > 1 ? overrides.finalPr : {}) };
     const endpoint = args.at(-1);
+    if (endpoint === 'repos/test/project') return { id: 7, full_name: 'test/project', html_url: 'https://github.com/test/project', default_branch: 'main' };
+    if (endpoint === 'repos/test/project/pulls/42') return { number: 42, html_url: 'https://github.com/test/project/pull/42', state: pr.state === 'OPEN' ? 'open' : 'closed',
+      merged_at: pr.state === 'MERGED' ? 'now' : null, merge_commit_sha: pr.mergeCommit?.oid,
+      head: { ref: 'feature', sha: pr.headRefOid, repo: { id: 7 } }, base: { ref: pr.baseRefName, sha, repo: { id: 7 } }, draft: pr.isDraft };
     if (args.includes('graphql')) {
       const query = args.find(x => x.startsWith('query='));
       const field = ['reviewThreads', 'comments', 'reviews'].find(x => query.includes(`${x}(`));

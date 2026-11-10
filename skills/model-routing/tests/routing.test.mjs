@@ -9,7 +9,7 @@ import {
 } from '../lib/routing.mjs';
 
 const catalog = [
-  { id: 'gpt-6-mini', family: 'gpt', provider: 'openai', efforts: ['low', 'medium', 'high'], effortOptionId: 'reasoning_effort' },
+  { id: 'gpt-6.1-sol', family: 'gpt', provider: 'openai', efforts: ['low', 'medium', 'high'], effortOptionId: 'reasoning_effort' },
   { id: 'gpt-6-astra', family: 'gpt', provider: 'openai', efforts: ['high', 'xhigh'], effortOptionId: 'reasoning_effort' },
   { id: 'claude-haiku-5-5', family: 'claude', provider: 'anthropic', efforts: ['low', 'high'], effortOptionId: 'effort' },
   { id: 'claude-sonnet-5-5', family: 'claude', provider: 'anthropic', efforts: ['low', 'high'], effortOptionId: 'effort' },
@@ -138,7 +138,7 @@ test('routeTask uses the home key for both direct calls without exposing it in i
       const body = JSON.parse(init.body);
       const stage = Object.keys(body.questions)[0];
       const candidates = Object.keys(body.questions[stage].criteria).map(value => ({ value }));
-      return { ok: true, json: async () => answer({ stage, candidates }, stage === 'model' ? 'gpt-6-mini' : 'high') };
+      return { ok: true, json: async () => answer({ stage, candidates }, stage === 'model' ? 'gpt-6.1-sol' : 'high') };
     } });
   assert.equal(result.status, 'routed');
   assert.equal(calls, 2);
@@ -184,20 +184,20 @@ test('ordinary Jev routing chooses model before that model supported effort', as
   const requests = [];
   const result = await routeTask({ ...base, judge: async request => {
     requests.push(request);
-    return { choice: request.stage === 'model' ? 'gpt-6-mini' : 'medium', confidence: 0.95 };
+    return { choice: request.stage === 'model' ? 'gpt-6.1-sol' : 'medium', confidence: 0.95 };
   } });
   assert.equal(result.status, 'routed');
-  assert.equal(result.route.modelId, 'gpt-6-mini');
+  assert.equal(result.route.modelId, 'gpt-6.1-sol');
   assert.equal(result.route.effort, 'medium');
   assert.equal(result.route.effortOptionId, 'reasoning_effort');
   assert.equal(requests.length, 2);
   assert.ok(requests[0].candidates.every(model => model.family === 'gpt'));
   assert.deepEqual(requests[1].candidates.map(effort => effort.value), ['low', 'medium', 'high']);
-  assert.equal(requests[1].modelId, 'gpt-6-mini');
+  assert.equal(requests[1].modelId, 'gpt-6.1-sol');
 });
 
 test('configured judge adapter takes priority over direct transport', async () => {
-  const result = await routeTask({ ...base, judge: async ({ stage }) => ({ choice: stage === 'model' ? 'gpt-6-mini' : 'high' }),
+  const result = await routeTask({ ...base, judge: async ({ stage }) => ({ choice: stage === 'model' ? 'gpt-6.1-sol' : 'high' }),
     transport: { ask() { throw new Error('transport must not be used'); } } });
   assert.equal(result.status, 'routed');
 });
@@ -207,7 +207,7 @@ test('routing passes task evidence to a configured adapter for both review and f
     const result = await routeTask({ ...base, catalog: implementationCatalog, task: { ...task, kind, plan: kind === 'fix' ? implementationPlan : undefined, evidence: ['Observed failing assertion in the requested scope'] }, judge: async request => {
       assert.equal(request.task.kind, kind);
       assert.deepEqual(request.task.evidence, ['Observed failing assertion in the requested scope']);
-      return { choice: request.stage === 'model' ? (kind === 'fix' ? 'gpt-6.1-sol' : 'gpt-6-mini') : 'high' };
+      return { choice: request.stage === 'model' ? (kind === 'fix' ? 'gpt-6.1-sol' : 'gpt-6.1-sol') : 'high' };
     } });
     assert.equal(result.status, 'routed');
   }
@@ -220,7 +220,7 @@ test('custom adapters that ignore cancellation are bounded; an already cancelled
   let called = false;
   const controller = new AbortController();
   controller.abort();
-  const cancelled = await routeTask({ ...base, signal: controller.signal, judge: async () => { called = true; return { choice: 'gpt-6-mini' }; } });
+  const cancelled = await routeTask({ ...base, signal: controller.signal, judge: async () => { called = true; return { choice: 'gpt-6.1-sol' }; } });
   assert.equal(cancelled.reason, 'jev_aborted_or_timed_out');
   assert.equal(called, false);
 });
@@ -229,7 +229,7 @@ test('Claude selection restricts routing to available 5.5 Claude models', async 
   const result = await routeTask({ ...base, selectedModel: 'claude-sonnet-5-5', catalog: [...catalog,
     { id: 'claude-sonnet-4', family: 'claude', efforts: ['high'], effortOptionId: 'effort' }],
     judge: async ({ stage, candidates }) => {
-      if (stage === 'model') assert.deepEqual(candidates.map(item => item.id), ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5']);
+      if (stage === 'model') assert.deepEqual(candidates.map(item => item.id), ['claude-sonnet-5-5', 'claude-opus-5-5']);
       return { choice: stage === 'model' ? 'claude-sonnet-5-5' : 'high' };
     } });
   assert.equal(result.status, 'routed');
@@ -237,7 +237,7 @@ test('Claude selection restricts routing to available 5.5 Claude models', async 
 
 test('Jev unavailable, inconclusive, malformed, or thrown errors request main judgment without fallback', async () => {
   for (const extra of [ {}, { judge: async () => { throw new Error('sensitive-provider-error'); } },
-    { judge: async () => ({ choice: 'gpt-6-mini', confidence: 0.2 }) },
+    { judge: async () => ({ choice: 'gpt-6.1-sol', confidence: 0.2 }) },
     { judge: async () => ({ choice: 'invented-model' }) } ]) {
     const result = await routeTask({ ...base, ...extra });
     assert.equal(result.status, 'main_judgment_required');
@@ -255,7 +255,7 @@ test('no direct credential reports configured MCP as available next path', async
 });
 
 test('main judgment is validated before dispatch and rejects unknown model/effort and option mismatches', async () => {
-  const good = { modelId: 'gpt-6-mini', effort: 'high', reason: 'Task scope is bounded and fully understood.' };
+  const good = { modelId: 'gpt-6.1-sol', effort: 'high', reason: 'Task scope is bounded and fully understood.' };
   assert.equal((await routeTask({ ...base, judgment: good })).route.source, 'main_judgment');
   for (const route of [ { ...good, modelId: 'unknown' }, { ...good, effort: 'max' },
     { ...good, modelId: 'claude-opus-5-5', effort: 'max' }, { ...good, effortOptionId: 'wrong_option' } ]) {
@@ -266,17 +266,17 @@ test('main judgment is validated before dispatch and rejects unknown model/effor
 
 test('reviewer and fixer subagents cannot route and inline override cannot bypass fanout rules', async () => {
   for (const callerRole of ['reviewer', 'fixer', undefined]) {
-    assert.equal((await routeTask({ ...base, callerRole, judgment: { modelId: 'gpt-6-mini', effort: 'high' } })).reason, 'main_agent_required');
-    assert.equal(validateRoute({ ...base, callerRole, route: { modelId: 'gpt-6-mini', effort: 'high' } }).valid, false);
+    assert.equal((await routeTask({ ...base, callerRole, judgment: { modelId: 'gpt-6.1-sol', effort: 'high' } })).reason, 'main_agent_required');
+    assert.equal(validateRoute({ ...base, callerRole, route: { modelId: 'gpt-6.1-sol', effort: 'high' } }).valid, false);
   }
   const result = await routeTask({ ...base, task: { description: 'Change authorization rules' }, inlineOverride: true,
-    judgment: { modelId: 'gpt-6-mini', effort: 'high', reason: 'Override requested' } });
+    judgment: { modelId: 'gpt-6.1-sol', effort: 'high', reason: 'Override requested' } });
   assert.notEqual(result.status, 'routed');
 });
 
 test('security work requires Astra xhigh or Opus 5.5 xhigh, including explicit main judgment', async () => {
   const securityTask = { description: 'Review authentication middleware' };
-  for (const [selectedModel, modelId, effort] of [['gpt-6-mini', 'gpt-6-astra', 'xhigh'], ['claude-sonnet-5-5', 'claude-opus-5-5', 'xhigh']]) {
+  for (const [selectedModel, modelId, effort] of [['gpt-6.1-sol', 'gpt-6-astra', 'xhigh'], ['claude-sonnet-5-5', 'claude-opus-5-5', 'xhigh']]) {
     const calls = [];
     const result = await routeTask({ ...base, selectedModel, task: securityTask, judge: async request => {
       calls.push(request); return { choice: request.stage === 'model' ? modelId : effort };
@@ -302,10 +302,10 @@ test('algorithm and uncertain work cannot select low effort', async () => {
   for (const riskyTask of [{ description: 'Rewrite graph traversal algorithm' }, { description: 'Unknown scope' }]) {
     const result = await routeTask({ ...base, task: riskyTask, judge: async ({ stage, candidates }) => {
       if (stage === 'effort') assert.ok(candidates.every(item => ['high', 'xhigh', 'max'].includes(item.level)));
-      return { choice: stage === 'model' ? 'gpt-6-mini' : 'low' };
+      return { choice: stage === 'model' ? 'gpt-6.1-sol' : 'low' };
     } });
     assert.equal(result.status, 'main_judgment_required');
-    assert.equal(validateRoute({ ...base, task: riskyTask, route: { modelId: 'gpt-6-mini', effort: 'low' } }).valid, false);
+    assert.equal(validateRoute({ ...base, task: riskyTask, route: { modelId: 'gpt-6.1-sol', effort: 'low' } }).valid, false);
   }
 });
 
@@ -368,7 +368,7 @@ test('direct TypeSafe transport uses the verified official endpoint and typed mo
       const stage = Object.keys(body.questions)[0];
       assert.equal(body.questions[stage].type, 'choice');
       const candidates = Object.keys(body.questions[stage].criteria).map(value => ({ value }));
-      const choice = stage === 'model' ? 'gpt-6-mini' : 'high';
+      const choice = stage === 'model' ? 'gpt-6.1-sol' : 'high';
       return { ok: true, json: async () => answer({ stage, candidates }, choice) };
     } });
   assert.equal(result.status, 'routed');
@@ -387,9 +387,9 @@ test('transport failures and response echoes never expose credential values', as
 });
 
 test('malformed probability distributions and tied/inconclusive answers require main judgment', async () => {
-  for (const probabilities of [{ 'gpt-6-mini': 2, 'gpt-6-astra': -1 }, { 'gpt-6-mini': 0.5, 'gpt-6-astra': 0.5 }, { 'gpt-6-mini': 1 }]) {
+  for (const probabilities of [{ 'gpt-6.1-sol': 2, 'gpt-6-astra': -1 }, { 'gpt-6.1-sol': 0.5, 'gpt-6-astra': 0.5 }, { 'gpt-6.1-sol': 1 }]) {
     const result = await routeTask({ ...base, transport: { ask: async () => ({ answers: { model: {
-      type: 'choice', choice: 'gpt-6-mini', probabilities, confidence: 0.95 } }, model: 'jev-latest' }) } });
+      type: 'choice', choice: 'gpt-6.1-sol', probabilities, confidence: 0.95 } }, model: 'jev-latest' }) } });
     assert.equal(result.status, 'main_judgment_required');
   }
 });
@@ -400,7 +400,7 @@ test('TYPESAFE_API_KEY is the first name checked within one source', () => {
 });
 
 const implementationCatalog = [
-  ...catalog,
+  ...catalog.filter(item => item.id !== 'gpt-6.1-sol'),
   ...['sol', 'terra'].map(name => ({ id: `gpt-6.1-${name}`, family: 'gpt', efforts: ['low', 'high', 'xhigh'], effortOptionId: 'reasoning_effort' })),
 ];
 const implementationPlan = {
@@ -455,7 +455,7 @@ test('planned fixes cannot inherit premium models or silently substitute unavail
       judgment: { modelId, effort, reason: 'Reuse reviewer model' } });
     assert.equal(result.reason, 'model_not_allowed');
   }
-  const result = await routeTask({ ...base, task: { kind: 'fix', plan: implementationPlan } });
+  const result = await routeTask({ ...base, catalog: catalog.filter(item => item.id !== 'gpt-6.1-sol'), task: { kind: 'fix', plan: implementationPlan } });
   assert.equal(result.status, 'required_model_blocked');
 });
 

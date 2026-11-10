@@ -15,6 +15,11 @@ fixture tests for routing decisions; never access real keys or call Jev here.
 | Claude authored code, capable GPT provider exists | Jev selects a GPT reviewer and effort |
 | Opposite models listed but dispatch support unconfirmed/disabled | Use an eligible same-family reviewer and record the capability reason |
 | Security review lacks opposite premium tier | Use eligible same-family premium tier with the security effort floor; if neither is usable, block |
+| Opposite family offers only Terra/Haiku/Fable/untiered models | Treat that family as lacking a qualified reviewer; use an eligible same-family Sol/Sonnet or premium model, otherwise block |
+| Routine review is bounded and understood | Jev/fallback chooses newest Sol/Astra or Sonnet/Opus; weaker models cannot be selected even by main judgment |
+| Review is classified complex with supporting evidence | Only Astra/Opus is eligible, at High or xhigh; record classification and evidence |
+| Security review is marked routine | Security floor still requires Astra/Opus at xhigh when supported; routine cannot waive it |
+| Simple implementation or file inventory | Terra/Haiku may remain eligible when the task and risk allow; review-only tier restrictions do not spread to unrelated tasks |
 | Author unknown | Treat caller family as author, record the assumption, then apply opposite-first capability selection |
 | Mixed-family task batch | Partition review scopes by actual implementing family; do not claim one reviewer is opposite to both |
 | Confirmed provider rejection before a child starts | Update capabilities, reroute, validate the same-family replacement; do not reset round budget |

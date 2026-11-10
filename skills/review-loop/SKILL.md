@@ -35,7 +35,10 @@ report missing scope rather than guessing. Do not include unrelated edits.
 
 Allow **three rounds total**, including the initial review. One fresh read-only
 reviewer per round; no reviewer fanout or nested helpers. Route every round through
-model-routing as `kind: "review"`. Prefer the opposite implementation family when
+model-routing as `kind: "review"`, with routine/complex classification and
+supporting task evidence. Reviews allow latest Sol/Astra or Sonnet/Opus only;
+complex reviews require Astra/Opus at High–xhigh, and security keeps its stronger
+floor. Terra, Haiku, Fable, and untiered models cannot review. Prefer the opposite implementation family when
 host capabilities and risk/effort eligibility support it; otherwise use the same
 family with a recorded reason. Unknown author family uses the caller's family
 as the author assumption. Jev or validated main-agent fallback selects the review

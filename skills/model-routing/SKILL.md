@@ -43,6 +43,13 @@ array means no dispatchable route. Explicitly disabled providers stay disabled.
   worker's family. If unknown, omit it and record the caller-family assumption.
   Prefer eligible opposite-family models when dispatch is confirmed. Otherwise
   use the author family and record the reason. Partition mixed-family work.
+  Review candidates are only newest **Sol/Astra** for GPT or **Sonnet/Opus** for
+  Claude; Terra, Haiku, Fable, and unrecognized tiers cannot review. Classify
+  `task.complexity` as `"routine"` or `"complex"` using actual task evidence,
+  retaining the reason in the task ledger and `task.evidence`. Omission defaults
+  to routine. Complex reviews require Astra/Opus with High or xhigh effort;
+  security reviews keep their stricter existing effort floor. Jev/fallback can
+  choose either eligible routine-review tier but cannot waive these restrictions.
 - Planning and unclassified reasoning retain the caller's family. Review and
   planning effort is capped at xhigh. Security reasoning requires newest Astra
   or Opus at xhigh, or that model's supported fallback at least High. A review
@@ -87,7 +94,8 @@ an unchecked fallback. This is main-agent LLM judgment, not a second service.
 
 Immediately before dispatch, refresh changed host metadata and use
 `validateRoute` (CLI `--validate`) with the current inputs. Record the exact
-route/source and `audit.selection`, plus the frontend choice/provenance.
+route/source and `audit.selection` (including review complexity), plus the
+frontend choice/provenance.
 
 A confirmed pre-launch availability rejection can mark that provider unavailable
 and reroute a review to the same family. On an ambiguous launch, reconcile the

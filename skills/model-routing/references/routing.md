@@ -36,6 +36,22 @@ required model, or effort eligibility is unavailable. Security floors are applie
 to each family independently. A missing opposite Opus cannot select Sonnet for a
 security review; it can fall back to an eligible same-family Astra instead.
 
+Review model eligibility is narrower than implementation or inventory eligibility:
+only newest GPT **Sol/Astra** or Claude **Sonnet/Opus** can review. Terra, Haiku,
+Fable, and unrecognized tiers are excluded in both `routeTask` and
+`validateRoute`, including main-agent fallback. A dispatchable opposite family
+with only weaker models triggers same-family selection; if neither family has a
+qualified reviewer, routing is blocked rather than lowered.
+
+For reviews, `task.complexity` accepts `"routine"` or `"complex"`; omission
+defaults to routine. The coordinator records supporting evidence in
+`task.evidence` and its task ledger. Complex reviews restrict the tier to
+Astra/Opus and efforts to High or xhigh. Security floors override routine/complex
+classification: when xhigh exists, a security review cannot choose High.
+Routine reviews can use Sol/Sonnet or the premium tier as Jev/fallback judges
+appropriate. Terra and Haiku remain eligible for appropriate implementation and
+file-inventory tasks, which do not become reviews merely because they read code.
+
 For execute-work frontend implementation/fixes, `task.frontend: true` requires
 `frontendPreference: "primary" | "fallback"`. The coordinator asks once, retaining
 `{family, choice}` across the run and repairs. Primary selects latest Astra/Fable;
@@ -45,7 +61,7 @@ effort up to xhigh, and main-agent fallback cannot substitute another tier.
 Standalone interactive fixes do not acquire this exception automatically.
 
 `audit.selection` records caller/implementation family, assumed provenance,
-preferred review family, fallback reason, capabilities, and frontend preference
+preferred review family, fallback reason, review complexity, capabilities, and frontend preference
 when applicable. Routes include the exact provider when supplied by the catalog.
 Record this with the run ledger and the source/time of capability metadata.
 
@@ -120,8 +136,8 @@ Date suffixes are ignored. For each tier, only the newest version in the
 host catalog is eligible; older versions fail with `model_not_allowed`. An
 entry with no readable version (such as an `opus` alias) counts only when its
 tier has no versioned entry. An opaque host ID can carry the tier and version
-in the optional `name`. Untiered GPT models stay eligible for non-security
-reviews.
+in the optional `name`. Untiered GPT models can remain eligible for appropriate
+non-review reasoning tasks; they never satisfy the review model floor.
 
 ## Route by task phase
 
@@ -147,6 +163,9 @@ then dispatch the planned fix to an implementation model.
   or scope return to main for a planning task and an updated implementation plan.
 - `kind: "planning"`, review, and unclassified tasks retain the reasoning floors
   below. Astra/Opus are available for reasoning and the explicit frontend exception.
+- Reviews additionally require Sol/Sonnet or above. Complex review classification
+  restricts candidates to Astra/Opus with at least High; routine classification
+  cannot cancel a security signal or its stricter floor.
 - A missing implementation model is a blocker; never silently use a premium
   reviewer or switch families. These constraints apply to Jev and main judgment.
 
@@ -221,7 +240,8 @@ const result = await routeTask({
 
 Task evidence holds only these fields (any JSON values): `id`, `kind`, `title`,
 `description`, `scope`, `paths`, `areas`, `evidence`, `readOnly`, `risk`,
-`uncertain`, `security`, `securitySensitive`, `algorithm`, `plan`, and `frontend`. Before asking a
+`uncertain`, `security`, `securitySensitive`, `algorithm`, `plan`, `frontend`, and
+`complexity`. `complexity` accepts only `"routine"` or `"complex"`. Before asking a
 provider for judgment, main must remove credentials and unrelated private data
 from it. Credential environment records are never sent as evidence.
 

@@ -62,7 +62,11 @@ dependency rather than silently omitting it. It does not invoke execute-work.
   removing this run's unchanged, merged coordinator worktree and local
   branch on the review machine.
 - If the user says "local only" or "no PR", follow that.
-- Never merge the PR, turn on auto-merge, or deploy.
+- Automatically merge this run's fix PR after validation when its target is a
+  confirmed working branch, following [merge-policy.md](references/merge-policy.md).
+  Shared/default/environment/release branches retain the user merge step.
+  Honor an explicit "leave the PR open" or other merge opt-out. Never enable
+  provider auto-merge, bypass policy, or deploy.
 
 ## Step 1: Pin down what to review
 
@@ -116,7 +120,8 @@ Main routes each reviewer and fixer through model-routing and records the exact
 model, provider/family, effort, source, and capability evidence before dispatch.
 Use host metadata, never remembered version IDs. Helpers never call Jev or route.
 
-For reviews, pass `kind: "review"` and the actual implementing family when known.
+For reviews, record routine/complex classification and supporting task evidence;
+pass `kind: "review"` and `task.complexity` and the actual implementing family when known.
 Unknown provenance uses the caller-family assumption. Prefer a dispatchable,
 risk-eligible opposite-family reviewer; otherwise use the same family and record
 why. Partition known mixed-family work. Jev or validated main judgment selects
@@ -299,6 +304,15 @@ Read [orchestration.md](references/orchestration.md) and
 
 ## Step 7: Open one PR
 
+Resolve the cloud provider and intended source push/target-base repositories
+using watch-pr's `references/providers.md`. Support GitHub.com, GitLab.com,
+Bitbucket Cloud, and Azure DevOps Services. Reuse an available connector or the
+provider adapter/request command; do not assume gh or GitHub. Keep fork source
+and target IDs separate, preserve the chosen base, search matching open requests,
+and reconcile uncertain creation before retrying. Verify the canonical request
+URL, IDs, refs, and published head after every creation/update. Use native PR/MR
+wording in reports; keep existing journal record kinds and manifests unchanged.
+
 1. When decisions, Clarify talks, fixes, checks, and cleanup are done, check the
    reviewed branch again. If it moved, read the new commits, rebase the
    coordinator if it is not pushed yet, and rerun the full suite. Ask again only if a
@@ -317,7 +331,9 @@ Automatically invoke `watch-pr` in this main chat after creating/updating the
 PR unless the user opts out. Pass the plan, approved fixes and Don't fix notes,
 worker identities/families, retained frontend preference, routing constraints,
 host capabilities, actual checks, PR/head SHA, and complete
-run-owned inventory. PR validation repairs must preserve the approved behavior;
+run-owned inventory. Read [merge-policy.md](references/merge-policy.md), classify
+the actual target, and pass the recorded merge policy. PR validation repairs
+must preserve the approved behavior;
 new scope or reversing a user decision requires clarification. Do not create a
 second PR for ordinary open-PR repairs.
 
@@ -325,9 +341,11 @@ watch-pr owns CI/review feedback and its worker/review-loop repair cycle. Keep
 this review's journal and page progress accurate, including later repair tasks
 and their cleanup. Preserve the coordinator while the PR is open.
 
-After the user merges, explicitly invoke watch-pr for the confirmed merge
-commit's CI and post-merge cleanup. Also accept “Clean up the merged review” as
-that invocation. Provide [cleanup.md](references/cleanup.md#post-merge-coordinator-cleanup)
+For an eligible working target, watch-pr repairs failures, rechecks the latest
+published head, and merges once it passes. Continue immediately with a one-time
+merge-commit CI observation and safe cleanup when validated. For shared targets,
+leave the PR open; after the user merges, explicitly invoke watch-pr. Also accept
+“Clean up the merged review” as that invocation. Provide [cleanup.md](references/cleanup.md#post-merge-coordinator-cleanup)
 for this run's guarded cleanup procedure, including squash/rebase merges.
 Keep the review database, reports, and chat. Do not change T3 auto-settle or
 remote branch-deletion settings. If no genuine merge/CI wakeup is available,
@@ -344,7 +362,7 @@ Post it in this review chat. Start with a short **overview** of the whole run:
 
 Then say, in plain words:
 
-- The PR link, or the exact blocker.
+- The PR link, target classification, and merged/left-open state, or exact blocker.
 - What works now.
 - Which checks really ran, and their results.
 - Coverage gaps.

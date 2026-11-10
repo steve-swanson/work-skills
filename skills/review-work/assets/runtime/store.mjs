@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { ROUTING_SOURCE } from './routing.mjs';
 
-export const VERSION = '1.4.0';
+export const VERSION = '1.5.0';
 const SCHEMA_VERSION = 1;
 const DECISIONS = new Set(['fix', 'dont_fix', 'clarify']);
 const LABELS = new Set(['issue', 'question', 'suggestion', 'nitpick', 'praise', 'todo', 'thought', 'chore', 'note', 'typo', 'polish', 'quibble']);

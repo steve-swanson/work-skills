@@ -166,7 +166,14 @@ baseline audit.
 - If one item is blocked, keep cleaning other eligible items. Report the exact
   identity of each kept item.
 
-## Open one PR
+## Open one PR/MR
+
+Use watch-pr's provider adapter or connector procedure for the actual source
+push and target-base repositories. Follow `references/providers.md` in that skill
+for discovery, creation/reuse, revisions, and ambiguous-write reconciliation.
+Support the four cloud services without assuming GitHub or gh. Keep the existing
+review journal record kinds and pinned runtimes unchanged.
+
 
 1. Check `readiness`.
 2. Decide every important coverage item still skipped or incomplete.
@@ -190,8 +197,11 @@ After the PR opens:
   constraints, worker identities, checks, and owned inventory unless opted out.
   It owns PR validation and review-loop repairs; never let a child watch.
 - Keep this journal accurate as PR validation repairs and cleanup occur.
-- Leave the PR open; no deployment or PR merge is allowed.
-- After explicit post-merge invocation, watch-pr verifies merge-commit CI before
+- Pass the target classification and merge policy from
+  [merge-policy.md](merge-policy.md). Eligible review-work fix PRs merge after
+  readiness; shared/default targets and opt-outs remain open. No deployment.
+- After automatic merge, or explicit invocation following a manual merge,
+  watch-pr verifies merge-commit CI before
   applying this run's guarded cleanup procedure. Keep completion and post-merge
   validation/cleanup as separate saved states. Do not promise a merge wakeup
   from an open-PR checks watcher.

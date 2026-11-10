@@ -97,7 +97,8 @@ Require a clean task checkout, committed work, and relevant passing checks.
 After aligning the task with the current coordinating tip in step 4, invoke
 `review-loop` in this coordinator with the task brief, worker identity, checkout,
 acceptance criteria, repository guidance, exact base/candidate SHAs, check results,
-the actual implementing family, host capabilities, retained frontend preference,
+the actual implementing family, review complexity/evidence, host capabilities,
+retained frontend preference,
 and any previous findings. It returns feedback to that worker and owns the
 three-round review budget. No extra supervisor or interactive review page.
 
@@ -213,6 +214,15 @@ the head; use a draft only when the user explicitly requests it. Check for an
 existing open PR for this head/base before creating one, including after an
 uncertain creation result, and reuse or update it rather than creating a duplicate.
 
+Resolve the cloud provider and intended source push/target-base repositories
+using watch-pr's `references/providers.md`. Support GitHub.com, GitLab.com,
+Bitbucket Cloud, and Azure DevOps Services. Reuse an available connector or the
+provider adapter/request command; do not assume gh or GitHub. Keep fork source
+and target IDs separate, preserve the chosen base, search matching open requests,
+and reconcile uncertain creation before retrying. Verify the canonical request
+URL, IDs, refs, and published head after every creation/update. Use native PR/MR
+wording in reports; keep existing journal record kinds and manifests unchanged.
+
 Follow repository PR templates, title conventions, and ticket-link requirements.
 Describe the final behavior, checks and their results, and concrete manual
 testing steps. Those steps must describe exercising the product and/or
@@ -221,7 +231,7 @@ Prefer local Git for the push and an available repository connector for PR
 creation; use an authenticated CLI when appropriate. Verify the PR's actual
 base, head, and published commit against the completed coordinating branch.
 Attach every created or updated PR to the current chat using the host's required
-linking tool as the next call after creation/push. Leave the PR open for review.
+linking tool as the next call after creation/push. Leave the PR/MR open for review.
 
 Invoke `watch-pr` automatically after creating/updating the PR unless the user
 opts out. Pass the plan, worker identities, review dispositions, checks, published

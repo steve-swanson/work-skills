@@ -216,6 +216,7 @@ function normalizeCatalog(catalog) {
  */
 const TIERS = Object.freeze({ gpt: ['astra', 'sol', 'terra'], claude: ['opus', 'sonnet', 'haiku', 'fable'] });
 const SECURITY_TIER = Object.freeze({ gpt: 'astra', claude: 'opus' });
+const REVIEW_TIERS = Object.freeze({ gpt: ['sol', 'astra'], claude: ['sonnet', 'opus'] });
 const IMPLEMENTATION_TIERS = Object.freeze({ gpt: ['sol', 'terra'], claude: ['sonnet', 'haiku'] });
 const modelLabel = model => `${model.id} ${model.name}`.toLowerCase()
   .replace(/(?:^|[^\d])(?:19|20)\d{2}-?\d{2}-?\d{2}(?!\d)/g, ' ');
@@ -266,7 +267,7 @@ const concretePlan = plan => record(plan) && nonempty(plan.summary)
 
 function taskEvidence(task) {
   const evidence = {};
-  for (const name of ['id', 'kind', 'title', 'description', 'scope', 'paths', 'areas', 'evidence', 'readOnly', 'risk', 'uncertain', 'security', 'securitySensitive', 'algorithm', 'plan', 'frontend']) {
+  for (const name of ['id', 'kind', 'title', 'description', 'scope', 'paths', 'areas', 'evidence', 'readOnly', 'risk', 'uncertain', 'security', 'securitySensitive', 'algorithm', 'plan', 'frontend', 'complexity']) {
     if (task[name] !== undefined) evidence[name] = structuredClone(task[name]);
   }
   return evidence;
@@ -281,6 +282,7 @@ function contextFor({ callerRole, selectedModel, catalog, task, authorFamily, fr
   if (!callerFamily) return failure('unknown_selected_family');
   if (authorFamily !== undefined && !['gpt', 'claude'].includes(authorFamily)) return failure('invalid_author_family');
   if (task.frontend !== undefined && typeof task.frontend !== 'boolean') return failure('invalid_frontend_classification');
+  if (task.complexity !== undefined && !['routine', 'complex'].includes(task.complexity)) return failure('invalid_task_complexity');
   if (dispatchCapabilities !== undefined && (!Array.isArray(dispatchCapabilities)
     || dispatchCapabilities.some(c => !record(c) || !nonempty(c.provider) || !['gpt', 'claude'].includes(c.family)
       || ['enabled', 'canRunChildTask', 'canRunCrossProviderChildTask'].some(k => typeof c[k] !== 'boolean'))
@@ -303,10 +305,11 @@ function contextFor({ callerRole, selectedModel, catalog, task, authorFamily, fr
     primary: callerFamily === 'gpt' ? 'Astra' : 'Fable', fallback: callerFamily === 'gpt' ? 'Sol' : 'Opus' };
   if (frontend && !['primary', 'fallback'].includes(frontendPreference)) return failure('invalid_frontend_preference');
   const risk = assessRisk(task);
-  // A concrete plan settles an unclassified fix, so it may use any effort up to the fix cap.
-  const minimumEffort = risk.security ? 'high' : implementing && risk.unclassified ? 'low' : risk.minimumEffort;
-  const maximumEffort = frontend ? 'xhigh' : implementing ? FIX_EFFORT_CAP : REVIEW_EFFORT_CAP;
   const reviewing = task.kind === 'review';
+  const complexReview = reviewing && task.complexity === 'complex';
+  // A concrete plan settles an unclassified fix, so it may use any effort up to the fix cap.
+  const minimumEffort = risk.security || complexReview ? 'high' : implementing && risk.unclassified ? 'low' : risk.minimumEffort;
+  const maximumEffort = frontend ? 'xhigh' : implementing ? FIX_EFFORT_CAP : REVIEW_EFFORT_CAP;
   const implementationFamily = authorFamily ?? callerFamily;
   const opposite = implementationFamily === 'gpt' ? 'claude' : 'gpt';
   const eligible = family => {
@@ -316,7 +319,10 @@ function contextFor({ callerRole, selectedModel, catalog, task, authorFamily, fr
         : frontendPreference === 'primary' ? 'fable' : 'opus';
       models = models.filter(m => m.tier === tier);
     } else if (implementing) models = models.filter(m => IMPLEMENTATION_TIERS[family].includes(m.tier));
-    else if (risk.security) models = models.filter(m => m.tier === SECURITY_TIER[family]);
+    else {
+      if (reviewing) models = models.filter(m => REVIEW_TIERS[family].includes(m.tier));
+      if (risk.security || complexReview) models = models.filter(m => m.tier === SECURITY_TIER[family]);
+    }
     return models.map(model => risk.security && !implementing ? { ...model, ...securityEfforts(model) }
       : { ...model, efforts: model.efforts.filter(e => LEVELS[e.level] >= LEVELS[minimumEffort]
         && LEVELS[e.level] <= LEVELS[maximumEffort]) }).filter(m => m.efforts.length);
@@ -330,14 +336,15 @@ function contextFor({ callerRole, selectedModel, catalog, task, authorFamily, fr
     family = implementationFamily;
     candidates = eligible(family);
   }
-  const required = risk.security && !implementing ? { model: family === 'gpt' ? 'newest Astra' : 'newest Opus', effort: 'xhigh' } : null;
+  const required = risk.security && !implementing ? { model: family === 'gpt' ? 'newest Astra' : 'newest Opus', effort: 'xhigh' }
+    : complexReview ? { model: family === 'gpt' ? 'newest Astra' : 'newest Opus', minimumEffort: 'high', maximumEffort: REVIEW_EFFORT_CAP } : null;
   const selection = { callerFamily, ...(reviewing ? { implementationFamily, authorFamilyAssumed: authorFamily === undefined,
-    preferredFamily: opposite, familyFallbackReason } : {}), ...(frontend ? { frontendPreference } : {}),
+    preferredFamily: opposite, familyFallbackReason, reviewComplexity: task.complexity ?? 'routine' } : {}), ...(frontend ? { frontendPreference } : {}),
     capabilities: dispatchCapabilities?.map(c => ({ provider: c.provider, family: c.family, enabled: c.enabled,
       canRunChildTask: c.canRunChildTask, canRunCrossProviderChildTask: c.canRunCrossProviderChildTask })) ?? 'current_family_only' };
   const context = { family, risk, required, maximumEffort, selection, fixedModel: frontend,
     allowedCandidates: candidates, taskEvidence: taskEvidence(task) };
-  if (!candidates.length) return { ...context, status: 'required_model_blocked', reason: required ? 'required_security_model_or_effort_unavailable' : 'no_eligible_model_effort',
+  if (!candidates.length) return { ...context, status: 'required_model_blocked', reason: risk.security && !implementing ? 'required_security_model_or_effort_unavailable' : complexReview ? 'required_complex_review_model_or_effort_unavailable' : 'no_eligible_model_effort',
     required: required ?? { effort: minimumEffort, maximumEffort } };
   return { ...context, status: 'ready' };
 }
@@ -366,7 +373,7 @@ function choiceRequest(stage, context, model) {
 
 function wireInput(request, jevModel, signal) {
   const instructions = request.stage === 'model'
-    ? 'Choose the least costly adequately capable model for this task phase. Candidates are already limited to the newest version of each tier the host offers. For planned fixes, use the supplied plan and acceptance criteria to judge implementation difficulty, not the reviewer model or original finding severity. Use only the supplied host model IDs. The main agent will separately choose a supported reasoning effort.'
+    ? 'Choose the least costly adequately capable model for this task phase. Candidates are already limited to the newest version of each tier the host offers. Reviews require at least Sol or Sonnet; complex reviews are restricted to Astra or Opus. For planned fixes, use the supplied plan and acceptance criteria to judge implementation difficulty, not the reviewer model or original finding severity. Use only the supplied host model IDs. The main agent will separately choose a supported reasoning effort.'
     : request.task?.frontend === true && ['fix', 'implementation'].includes(request.task?.kind)
       ? 'Choose the lowest supplied exact effort adequate for this frontend implementation. The user-selected model tier is fixed. Frontend work may use up to extra-high; security, algorithmic and uncertain work requires at least High. Max and Ultra are excluded.'
     : ['fix', 'implementation'].includes(request.task?.kind)

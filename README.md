@@ -62,10 +62,13 @@ npx skills update
   T3 Code.
 - Git. execute-work and review-work make branches and worktrees.
 - Node.js 24 or later for shared routing, review-work's page/records, and watch-pr's helper.
-- Authenticated GitHub CLI (`gh`) for PR operations and the GitHub.com watcher.
+- Provider access for GitHub.com, GitLab.com, Bitbucket Cloud, or Azure DevOps
+  Services: a supported connector, or authenticated `gh`/`glab`, configured
+  Bitbucket OAuth/API token, or Azure CLI/DevOps PAT access. Only configure the
+  provider you use. See [provider setup](skills/watch-pr/references/providers.md).
 - Terminal monitoring needs a host that supports long-running execution or event
   notifications. A helper cannot itself resume an agent; unsupported hosts report
-  the limitation. T3 uses its native watcher for open PRs.
+  the limitation. Use a native watcher only when support for that provider/event is confirmed.
 
 ## Optional: model routing with Jev
 
@@ -79,7 +82,9 @@ choice against the same candidates and risk rules. Only the coordinator routes.
   tier stays fixed while Jev/fallback selects effort up to extra-high. The choice
   persists through retries, resumes, and PR repairs.
 - **Other implementation:** latest Sol/Terra or Sonnet/Haiku, capped at High.
-- **Reviews:** prefer a capable opposite-family reviewer when the harness can
+- **Reviews:** latest Sol/Astra or Sonnet/Opus only. Complex reviews require
+  Astra/Opus at High–extra-high; Terra/Haiku/Fable cannot review. Prefer a capable
+  opposite-family reviewer when the harness can
   actually dispatch it; otherwise use the implementing family and record why.
   Catalog presence alone does not prove support. This works through each host's
   capabilities rather than a T3-only rule.
@@ -146,7 +151,8 @@ Use it when the work is defined and approved.
    go through fixes and re-review, while optional feedback stays discretionary.
 4. Reviews each part against the current coordinating tip, then merges the
    passing commit with a fast-forward merge. Reviews run without user triage.
-5. Removes temporary task worktrees/branches and opens one PR into `develop`.
+5. Removes temporary task worktrees/branches and creates or reuses one PR/MR
+   into `develop` on the detected cloud provider.
 6. Automatically invokes watch-pr to repair CI/review failures and report readiness.
    Keeps the coordinator for explicit post-merge validation and cleanup.
 
@@ -183,7 +189,10 @@ Use it to review a feature branch (its diff) or a whole codebase.
 4. When you click **Submit**, it fixes only the findings you approved, with
    subagents in separate worktrees, and opens one pull request.
 5. Invokes watch-pr automatically for CI/review feedback within the approved
-   scope, then reports every finding, your choice, and the result.
+   scope. Fix PRs into working branches (for example `feature/*` or `fix/*`)
+   merge automatically after current CI, reviews, and feedback pass. Default,
+   shared, environment, and release targets such as `main`, `develop`, `qa`,
+   and `stg` remain open for you to merge. Reports every finding and result.
 
 **Good to know**
 
@@ -216,7 +225,8 @@ Use it to review a feature branch (its diff) or a whole codebase.
 - Blocking findings need a fix or an evidence-backed objection accepted on recheck.
 - PASS applies to the exact reviewed base/candidate commits. Exhaustion is FAIL.
 - Routes every round through model-routing: capable opposite family preferred,
-  otherwise same-family review, with task/risk-based model and effort selection.
+  otherwise same-family review, with task/risk-based model and effort selection. Sol/Sonnet are the minimum
+  tiers; complex/security reviews use Astra/Opus.
 - Reuses the existing worker; standalone callers handle their own fixes.
 
 > Use review-loop to review this committed change against its acceptance criteria.
@@ -232,17 +242,36 @@ were informed by [sol-loop](https://github.com/t3dotgg/tstack/blob/main/skills/s
 
 Both PR-producing skills invoke this automatically unless opted out. It verifies
 CI and feedback, sends valid failures back to the worker, reviews repairs, pushes
-them to the same open PR, and reports readiness. You merge the PR.
+them to the same open PR, and reports readiness. You merge the PR unless
+review-work supplied its [working-target merge policy](skills/review-work/references/merge-policy.md).
+That policy repairs failures and merges once validation succeeds; standalone
+watch-pr and execute-work keep manual merge behavior.
 
-After merge, invoke it again:
+After a manual merge, invoke it again (authorized automatic merges enter this
+validation immediately):
 
 > Use watch-pr for https://github.com/owner/repo/pull/123 after merge.
 
 It verifies CI for the actual merge commit, opens and watches a repair PR if
 needed, and safely cleans up unchanged, merged run-owned checkouts after success.
-It never merges PRs, deploys, force-pushes, or changes T3 auto-settle settings.
+It never bypasses merge policy, deploys, force-pushes, or changes T3 auto-settle settings.
 Turning off auto-settle does not create post-merge CI wakeups. In T3, pending
 post-merge runs require explicit resume because its PR watcher handles open PRs.
+
+Creation and watching support **GitHub.com, GitLab.com, Bitbucket Cloud, and
+Azure DevOps Services**. Self-hosted editions are outside this version. The
+read-only watcher and explicit request-write command share provider adapters;
+see [provider setup and operations](skills/watch-pr/references/providers.md).
+
+```bash
+node /absolute/path/watch-pr/scripts/watch.mjs --url https://gitlab.com/group/project/-/merge_requests/123 --once
+```
+
+Automatic monitoring is used only where the host supports that provider/event.
+If it cannot wake the agent, the workflow still creates the PR/MR, fixes visible
+failures, and clearly tells you to resume watch-pr later. Pending/unknown CI is
+never reported ready. GitHub's existing `--repo owner/name --pr number` syntax
+continues to work.
 
 The portable Node helper supports terminal hosts. See
 [monitoring](skills/watch-pr/references/monitoring.md) for commands, exit codes,
@@ -277,7 +306,7 @@ skills/
   execute-work/   SKILL.md
   review-work/    SKILL.md, references/, assets/runtime/, scripts/, tests/
   review-loop/    SKILL.md, references/, evals/
-  watch-pr/       SKILL.md, references/, scripts/, tests/
+  watch-pr/       SKILL.md, references/, lib/providers/, scripts/, tests/
   model-routing/  SKILL.md, references/, lib/, scripts/, tests/, evals/
 ```
 

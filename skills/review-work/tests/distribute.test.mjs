@@ -21,7 +21,10 @@ test('real six-skill bundle includes dependency references and watcher helper', 
   const bundle = await buildBundle({ skillsRoot });
   assert.equal(bundle.version, 3);
   assert.deepEqual(bundle.manifest.skills, skills);
-  for (const relative of ['review-loop/references/review-code.md', 'watch-pr/scripts/watch.mjs', 'model-routing/lib/routing.mjs', 'model-routing/scripts/route.mjs']) {
+  for (const relative of ['review-loop/references/review-code.md', 'watch-pr/scripts/watch.mjs', 'watch-pr/scripts/request.mjs',
+    'watch-pr/lib/identity.mjs', 'watch-pr/lib/merge-policy.mjs', 'review-work/references/merge-policy.md',
+    ...['github', 'gitlab', 'bitbucket', 'azure'].map(name => `watch-pr/lib/providers/${name}.mjs`),
+    'model-routing/lib/routing.mjs', 'model-routing/scripts/route.mjs']) {
     assert.equal(Buffer.from(bundle.contents[relative], 'base64').toString('utf8'),
       await readFile(path.join(skillsRoot, relative), 'utf8'));
   }
@@ -32,6 +35,10 @@ test('real six-skill bundle includes dependency references and watcher helper', 
       await assert.rejects(installBundle({ bundle: old, home: root }), /rebuild.*six-skill/);
       assert.deepEqual(await readdir(root), []);
     }
+    assert.equal((await installBundle({ bundle, home: root })).status, 'installed');
+    assert.equal((await verifyBundle({ bundle, home: root })).status, 'verified');
+    const { stdout } = await run(process.execPath, [path.join(root, '.agents', 'skills', 'watch-pr', 'scripts', 'request.mjs'), '--help']);
+    assert.match(JSON.parse(stdout).help, /resolve-thread\|merge/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
