@@ -82,10 +82,13 @@ helper. Its status is evidence for the agent, not an unconditional approval.
 5. Revalidate the latest head and wait for its CI and required reviews. Old green
    runs are not proof for a new push. Process new actionable feedback the same way.
 
-Stop and escalate if the same failure recurs without progress, review-loop
-exhausts its budget, required evidence/access is unavailable, or scope needs a
-product decision. Do not reset a failed review budget by starting another repair
-for the same unresolved issue. Optional comments cannot force endless revisions.
+Use review-loop's three-round soft cap: diagnose recurring failures, change an
+ineffective repair approach, and continue fresh reviews while evidence shows
+progress. Do not stop or ask the user solely because of the round count.
+Escalate when investigation finds no viable resolution and fixes have stalled,
+required evidence/access cannot be obtained, or scope needs a product decision.
+Keep the same findings and round history across repairs for an unresolved issue.
+Optional comments cannot force endless revisions.
 
 ## 3. Wait or report ready
 

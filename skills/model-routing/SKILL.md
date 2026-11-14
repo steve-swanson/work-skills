@@ -101,5 +101,7 @@ A confirmed pre-launch availability rejection can mark that provider unavailable
 and reroute a review to the same family. On an ambiguous launch, reconcile the
 task ID or confirm cancellation/stop before starting any replacement. A reviewer
 returning blocking findings is not an availability failure. Never launch duplicate
-reviewers, lower the security floor, or reset review-loop's three-round budget.
+reviewers, lower the security floor, or reset review-loop's round count and
+progress ledger. Its three-round soft cap permits further reviews while repairs
+make progress; routing changes do not erase prior failed attempts.
 If neither family is usable, report a blocker with capability evidence.

@@ -1,4 +1,4 @@
 interface:
   display_name: "Review Loop"
   short_description: "Capability-aware reviews with worker feedback and rechecks"
-  default_prompt: "Use $review-loop to review this committed change and work through findings for up to three rounds."
+  default_prompt: "Use $review-loop to review this committed change with a three-round soft cap; diagnose recurring failures, change ineffective repair approaches, and continue while fixes make progress. Ask the user only when blocked or stalled without a viable resolution."

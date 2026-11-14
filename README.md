@@ -9,7 +9,7 @@ Six agent skills for planning, implementation, review, and PR validation:
 | [plan-work](skills/plan-work/SKILL.md) | Investigates a ticket or request and writes a complete implementation plan. | No, read-only |
 | [execute-work](skills/execute-work/SKILL.md) | Carries out an approved plan with subagents in separate Git worktrees, then opens one pull request. | Yes |
 | [review-work](skills/review-work/SKILL.md) | Reviews a branch or codebase, shows the findings on a local web page, and fixes only what you approve. | Only approved fixes |
-| [review-loop](skills/review-loop/SKILL.md) | Runs a small independent review and returns findings to the worker for up to three rounds. | Scoped local fixes |
+| [review-loop](skills/review-loop/SKILL.md) | Runs a small independent review with a three-round soft cap; continues while repairs make progress. | Scoped local fixes |
 | [watch-pr](skills/watch-pr/SKILL.md) | Validates PRs, repairs CI/review failures, and checks merge CI before cleanup. | Scoped repairs and PR replies |
 | [model-routing](skills/model-routing/SKILL.md) | Shares Jev/fallback model and effort selection, frontend preferences, and capability-based review routing. | No |
 
@@ -220,10 +220,14 @@ Use it to review a feature branch (its diff) or a whole codebase.
 <details>
 <summary><strong>review-loop</strong> — small review, worker response, focused recheck</summary>
 
-- One independent read-only reviewer at a time, with three rounds total.
+- One independent read-only reviewer at a time, with a three-round soft cap.
+- At the cap, diagnoses recurring failures and changes ineffective repair approaches;
+  continues fresh reviews while evidence shows progress without asking permission.
+  Escalates when no viable resolution remains and fixes have stalled, or a
+  scope/product/access blocker requires user input.
 - Uses Conventional Comments; workers can decline optional feedback with reasons.
 - Blocking findings need a fix or an evidence-backed objection accepted on recheck.
-- PASS applies to the exact reviewed base/candidate commits. Exhaustion is FAIL.
+- PASS applies to the exact reviewed base/candidate commits; round count alone cannot cause FAIL.
 - Routes every round through model-routing: capable opposite family preferred,
   otherwise same-family review, with task/risk-based model and effort selection. Sol/Sonnet are the minimum
   tiers; complex/security reviews use Astra/Opus.

@@ -56,7 +56,9 @@ watch-pr handles CI and review feedback using its existing worker and review-loo
 repair process. Failed/pending/unknown required validation, conflicts, missing
 required approval, or actionable blockers prevent merging. Keep Don't fix notes
 and evidence-backed declined nitpicks; do not reopen them merely to get approval.
-Stop at existing scope/product/access blockers and exhausted review rounds.
+Stop at existing scope/product/access blockers or when review-loop's diagnosis
+finds no viable resolution and repairs have stalled. Three review rounds are a
+soft cap; continue while evidence shows progress, preserving the round history.
 
 After readiness, reread the PR and all requirements for the exact current head
 and target revision. Account for every current feedback item with its disposition

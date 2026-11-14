@@ -22,7 +22,8 @@ deletion. Authorized writes use the separate request helper.
 | review-work fixes into `feature/editor` | Preserve working-target authorization through worker repairs and resumptions; fresh current-head checks, required reviews and feedback pass, merge, observe merge CI, then guarded cleanup |
 | review-work fixes from `fix/review` into `main`, `develop`, `qa`, `stg`, or release | Target classification retains manual merge regardless of the source prefix; no delayed provider auto-merge |
 | Custom default/shared branch or explicit merge opt-out | Leave request open; record evidence and reason; ordinary task-branch names alone do not override default/shared role |
-| Retarget, new head, target movement or new feedback before merge | Invalidate old merge decision; repair/review/revalidate without resetting review-loop budget |
+| Retarget, new head, target movement or new feedback before merge | Invalidate old merge decision; repair/review/revalidate with review-loop's soft cap and continuous round/progress ledger |
+| Repair review reaches round 3 | Diagnose the causes and change ineffective repairs; continue fresh reviews while evidence shows progress without asking solely about the count; escalate only for stalled repairs without a viable resolution or an existing scope/product/access blocker |
 | Merge response lost or accepted asynchronously | Record `merge_pending`, reconcile same intent, never submit a duplicate mutation; only provider MERGED plus actual commit proves success |
 | Pending merge CI in T3, no supported CI wakeup | Inspect once and disclose manual resume; do not run a custom waiting loop or promise automatic resumption |
 

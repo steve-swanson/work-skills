@@ -100,11 +100,16 @@ acceptance criteria, repository guidance, exact base/candidate SHAs, check resul
 the actual implementing family, review complexity/evidence, host capabilities,
 retained frontend preference,
 and any previous findings. It returns feedback to that worker and owns the
-three-round review budget. No extra supervisor or interactive review page.
+three-round soft cap and progress-based continuation. At the cap, diagnose
+recurring failures and change the repair approach; continue fresh reviews while
+evidence shows progress. Do not stop or ask the user merely because three rounds
+have run. Escalate when investigation finds no viable resolution and fixes have
+stalled, or an existing scope/product/access blocker requires user input.
+No extra supervisor or interactive review page.
 
 Record its result, SHAs, and dispositions in the task checklist. Integrate only
 PASS. Keep failed or blocked work for resolution; do not silently skip it or
-restart the same failed loop to obtain a fresh budget.
+restart the same failed loop to erase its findings or round history.
 
 ## 4. Integrate serially with fast-forward merges
 

@@ -69,7 +69,9 @@ Revalidate immediately before dispatch. On confirmed pre-launch unavailability,
 update the provider capability and reroute. An uncertain task launch requires
 reconciliation or confirmed stop before replacement; never start a second review
 on a guess. Findings are not provider failure. Router calls never dispatch or
-reset the caller's review budget.
+reset the caller's round count or progress ledger. Review-loop's three-round
+soft cap allows further reviews while repairs make progress; rerouting alone
+does not justify another attempt.
 
 ## Standalone CLI
 
